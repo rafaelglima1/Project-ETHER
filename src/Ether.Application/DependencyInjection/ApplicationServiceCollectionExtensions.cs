@@ -25,6 +25,8 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<CreateCharacterHandler>();
         services.AddScoped<GetCharacterHandler>();
         services.AddScoped<GetAccountCharactersHandler>();
+        services.AddScoped<EnterWorldHandler>();
+        services.AddScoped<MoveCharacterHandler>();
 
         return services;
     }

@@ -7,6 +7,7 @@ using Ether.Infrastructure.Dependencies;
 using Ether.Infrastructure.Persistence;
 using Ether.Infrastructure.Redis;
 using Ether.Infrastructure.Security;
+using Ether.Infrastructure.World;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -44,6 +45,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<WebSocketOptions>(configuration.GetSection(WebSocketOptions.SectionName));
         services.Configure<GameServerOptions>(configuration.GetSection(GameServerOptions.SectionName));
         services.Configure<CharacterOptions>(configuration.GetSection(CharacterOptions.SectionName));
+        services.Configure<WorldOptions>(configuration.GetSection(WorldOptions.SectionName));
 
         // Authentication options are validated at startup: in Production a usable
         // signing key is mandatory and the development placeholder is rejected.
@@ -86,6 +88,7 @@ public static class InfrastructureServiceCollectionExtensions
         // Security services (M2).
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
+        services.AddSingleton<IWorldMapProvider, StaticWorldMapProvider>();
 
         // Repositories and unit of work depend on the always-registered EF Core context.
         services.AddScoped<IAccountRepository, EfAccountRepository>();

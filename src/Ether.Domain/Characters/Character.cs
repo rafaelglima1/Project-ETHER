@@ -140,6 +140,62 @@ public sealed class Character
             _ => false,
         };
 
+    /// <summary>
+    /// Moves the character to a server-validated destination. The client only
+    /// requests the destination; bounds and distance are enforced here.
+    /// </summary>
+    public void MoveTo(WorldPosition destination, int maxDistance, WorldMap map, DateTimeOffset nowUtc)
+    {
+        if (State is not (CharacterState.InWorld or CharacterState.Combat))
+        {
+            throw new DomainException("Character must be in the world to move.");
+        }
+
+        if (!map.Contains(destination) || destination.MapId != MapId)
+        {
+            throw new DomainException("Destination is outside the current map.");
+        }
+
+        var distance = Math.Max(Math.Abs(destination.X - PositionX), Math.Abs(destination.Y - PositionY));
+        if (distance > maxDistance)
+        {
+            throw new DomainException($"Movement exceeds the allowed distance of {maxDistance} tiles.");
+        }
+
+        PositionX = destination.X;
+        PositionY = destination.Y;
+        UpdatedAt = nowUtc;
+    }
+
+    /// <summary>Places the character into the world (loading → in world).</summary>
+    public void EnterWorld(DateTimeOffset nowUtc)
+    {
+        if (State == CharacterState.InWorld)
+        {
+            return;
+        }
+
+        if (State is not (CharacterState.Offline or CharacterState.Loading))
+        {
+            throw new DomainException($"Character cannot enter the world from state {State}.");
+        }
+
+        State = CharacterState.InWorld;
+        UpdatedAt = nowUtc;
+    }
+
+    /// <summary>Marks the character as offline (leaving the world).</summary>
+    public void LeaveWorld(DateTimeOffset nowUtc)
+    {
+        if (State == CharacterState.Offline)
+        {
+            return;
+        }
+
+        State = CharacterState.Offline;
+        UpdatedAt = nowUtc;
+    }
+
     private static string NormalizeName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
