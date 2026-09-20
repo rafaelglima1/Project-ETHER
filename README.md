@@ -116,6 +116,8 @@ client/                   Godot client (future milestone)
 Container runtime validation (images, volumes, persistence, networking, restart,
 healthchecks) is performed on the **Oracle Cloud** environment. The absence of
 Docker Desktop on a Windows development machine does **not** block a milestone.
+See [`docs/operations/oracle-runtime.md`](docs/operations/oracle-runtime.md) for
+the runtime host, connection and deployment outline.
 
 ## Getting started
 

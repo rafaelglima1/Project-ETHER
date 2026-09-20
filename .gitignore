@@ -83,6 +83,11 @@ secrets.json
 *.p12
 *.key
 *.pem
+*.ppk
+id_rsa*
+id_ed25519*
+id_ecdsa*
+.ssh/
 
 ## Logs / temp
 *.log
