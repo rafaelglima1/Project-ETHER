@@ -1,0 +1,36 @@
+; Project Ether — Godot client (Blueprint v5.0 §49).
+;
+; Mobile-first 2D MMORPG client. The client is presentation + intent only:
+; all authoritative state (HP, XP, damage, loot, movement outcome) belongs to
+; the GameServer. This project never validates gameplay actions.
+;
+; Engine: Godot 4.x (GDScript). See client/Ether.Game/README.md.
+
+config_version=5
+
+[application]
+
+config/name="Project Ether"
+config/description="Project Ether — mobile-first 2D MMORPG client (Blueprint v5.0 §49)."
+run/main_scene="res://scenes/bootstrap/bootstrap.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://icon.svg"
+boot_splash/show_image=false
+
+[autoload]
+
+GameClient="*res://scripts/core/game_client.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/handheld/orientation=0
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0
