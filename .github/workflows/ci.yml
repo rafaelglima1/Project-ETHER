@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore ProjectEther.sln
+
+      - name: Build
+        run: dotnet build ProjectEther.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test ProjectEther.sln -c Release --no-build --verbosity normal
+
+      - name: Architecture tests
+        run: dotnet test tests/Ether.Architecture.Tests/Ether.Architecture.Tests.csproj -c Release --no-build --verbosity normal

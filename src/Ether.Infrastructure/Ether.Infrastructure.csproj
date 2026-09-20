@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ether.Infrastructure — technical implementations (Blueprint v5.0 §4).
+    EF Core, PostgreSQL, Redis, repositories, unit of work, outbox, auth infra.
+    No gameplay tables are created at M0.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ether.Application\Ether.Application.csproj" />
+    <ProjectReference Include="..\Ether.Contracts\Ether.Contracts.csproj" />
+    <ProjectReference Include="..\Ether.Domain\Ether.Domain.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageReference Include="StackExchange.Redis" Version="3.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

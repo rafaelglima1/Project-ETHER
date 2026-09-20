@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!--
+    Ether.Worker — asynchronous/scheduled processes (Blueprint v5.0 §4).
+    Outbox, notifications, analytics, cleanup, market expiration, world maintenance.
+    References Application + Infrastructure. No gameplay at M0.
+  -->
+
+  <PropertyGroup>
+    <UserSecretsId>dotnet-Ether.Worker-07e4d513-582e-44e3-ba35-59ee744b3586</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ether.Application\Ether.Application.csproj" />
+    <ProjectReference Include="..\Ether.Infrastructure\Ether.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

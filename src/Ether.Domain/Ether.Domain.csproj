@@ -1,0 +1,8 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ether.Domain — pure domain only (Blueprint v5.0 §4).
+    Must NOT depend on EF Core, ASP.NET, Redis, PostgreSQL, Godot, HTTP or WebSocket.
+  -->
+
+</Project>

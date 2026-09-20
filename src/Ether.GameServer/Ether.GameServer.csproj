@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Ether.GameServer — authoritative world loop (Blueprint v5.0 §4).
+    Owns the WebSocket gameplay endpoint. References Application + Infrastructure
+    + Contracts. No gameplay is implemented at M0.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ether.Application\Ether.Application.csproj" />
+    <ProjectReference Include="..\Ether.Contracts\Ether.Contracts.csproj" />
+    <ProjectReference Include="..\Ether.Infrastructure\Ether.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

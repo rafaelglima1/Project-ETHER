@@ -1,0 +1,16 @@
+<Project>
+
+  <!--
+    Project Ether — common build targets (Blueprint v5.0 §3).
+    Reserved for shared MSBuild targets. Intentionally minimal at M0.
+    Do not add project-specific logic here; keep cross-cutting concerns only.
+  -->
+
+  <!-- Ensure test projects always run against the same TFM as the solution. -->
+  <Target Name="EtherVerifyTargetFramework"
+          BeforeTargets="Build"
+          Condition="'$(TargetFramework)' != 'net10.0'">
+    <Warning Text="Project $(MSBuildProjectName) does not target net10.0 (found '$(TargetFramework)')." />
+  </Target>
+
+</Project>

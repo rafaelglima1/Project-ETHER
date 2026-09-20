@@ -1,0 +1,113 @@
+name: project-ether
+
+# Local development stack (Blueprint v5.0 §73).
+# Credentials here are development-only placeholders; never use them outside local.
+# Real deployments must provide secrets through environment variables / a secret store.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ether}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ether}
+      POSTGRES_DB: ${POSTGRES_DB:-ether}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ether} -d ${POSTGRES_DB:-ether}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: src/Ether.Api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      Database__ConnectionString: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ether};Username=${POSTGRES_USER:-ether};Password=${POSTGRES_PASSWORD:-ether}"
+      Redis__ConnectionString: "redis:6379"
+      Authentication__SigningKey: ${AUTHENTICATION_SIGNING_KEY:-development-only-signing-key-change-me}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  game-server:
+    build:
+      context: .
+      dockerfile: src/Ether.GameServer/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      Database__ConnectionString: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ether};Username=${POSTGRES_USER:-ether};Password=${POSTGRES_PASSWORD:-ether}"
+      Redis__ConnectionString: "redis:6379"
+      Authentication__SigningKey: ${AUTHENTICATION_SIGNING_KEY:-development-only-signing-key-change-me}
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  worker:
+    build:
+      context: .
+      dockerfile: src/Ether.Worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      Database__ConnectionString: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-ether};Username=${POSTGRES_USER:-ether};Password=${POSTGRES_PASSWORD:-ether}"
+      Redis__ConnectionString: "redis:6379"
+      Authentication__SigningKey: ${AUTHENTICATION_SIGNING_KEY:-development-only-signing-key-change-me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f Ether.Worker.dll > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-data:
+  redis-data:

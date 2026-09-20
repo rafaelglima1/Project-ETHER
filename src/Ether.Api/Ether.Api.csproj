@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Ether.Api — HTTP surface (Blueprint v5.0 §4).
+    Authentication, account/character management, health checks, admin endpoints
+    and the WebSocket handshake. References Application + Infrastructure + Contracts.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ether.Application\Ether.Application.csproj" />
+    <ProjectReference Include="..\Ether.Contracts\Ether.Contracts.csproj" />
+    <ProjectReference Include="..\Ether.Infrastructure\Ether.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ether.Contracts — communication contracts only (Blueprint v5.0 §4).
+    Commands, events, DTOs, protocol envelopes, error contracts and configuration
+    contracts. Must remain dependency-light: no domain rules, no infrastructure.
+  -->
+
+</Project>

@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Ether.Application — use cases (Blueprint v5.0 §4).
+    Depends only on Ether.Domain and Ether.Contracts.
+    Must NOT depend on Ether.Infrastructure.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ether.Domain\Ether.Domain.csproj" />
+    <ProjectReference Include="..\Ether.Contracts\Ether.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+
+</Project>
