@@ -17,6 +17,12 @@ public sealed class AuthenticationOptions
     /// <summary>Minimum accepted signing key length in Production.</summary>
     public const int MinimumSigningKeyLength = 32;
 
+    /// <summary>
+    /// Fallback used only outside Production so development and tests can run
+    /// without configuring a secret. Production refuses to start without a real key.
+    /// </summary>
+    public const string DevelopmentFallbackSigningKey = "ether-development-fallback-signing-key-change-me";
+
     public string Issuer { get; set; } = "ether";
 
     public string Audience { get; set; } = "ether-client";
@@ -33,4 +39,11 @@ public sealed class AuthenticationOptions
 
     /// <summary>Indicates whether signing material was provided.</summary>
     public bool IsConfigured => !string.IsNullOrWhiteSpace(SigningKey);
+
+    /// <summary>
+    /// Returns the configured signing key, or the development fallback when the
+    /// application is not running in Production.
+    /// </summary>
+    public string ResolveSigningKey() =>
+        IsConfigured ? SigningKey : DevelopmentFallbackSigningKey;
 }

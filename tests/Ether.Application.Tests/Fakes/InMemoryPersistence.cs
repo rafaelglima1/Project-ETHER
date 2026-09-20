@@ -7,8 +7,8 @@ namespace Ether.Application.Tests.Fakes;
 
 /// <summary>
 /// In-memory test double implementing the persistence abstractions.
-/// Mirrors the M1 behaviour: characters are committed on SaveChanges and the
-/// name uniqueness rule is enforced at commit time.
+/// Mirrors persistence behaviour: entities are committed on SaveChanges and
+/// uniqueness rules are enforced at commit time.
 /// </summary>
 internal sealed class InMemoryPersistence : IAccountRepository, ICharacterRepository, IUnitOfWork
 {
@@ -26,6 +26,9 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
 
     public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken) =>
         Task.FromResult(_accounts.SingleOrDefault(account => account.Id == accountId));
+
+    public Task<Account?> GetByEmailAsync(Email email, CancellationToken cancellationToken) =>
+        Task.FromResult(_accounts.SingleOrDefault(account => account.Email == email));
 
     public Task AddAsync(Character character, CancellationToken cancellationToken)
     {
@@ -46,6 +49,14 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
+        foreach (var account in _accounts)
+        {
+            if (_accounts.Count(existing => existing.Email == account.Email) > 1)
+            {
+                throw new DuplicateEmailException(account.Email.Value);
+            }
+        }
+
         foreach (var pending in _pendingCharacters)
         {
             if (_characters.Exists(character => string.Equals(character.Name, pending.Name, StringComparison.Ordinal)))

@@ -10,7 +10,9 @@ public sealed class AccountEndpointsTests
 {
     private static async Task<Guid> CreateAccountAsync(HttpClient client)
     {
-        var response = await client.PostAsJsonAsync(new Uri("/accounts", UriKind.Relative), new { });
+        var response = await client.PostAsJsonAsync(
+            new Uri("/auth/register", UriKind.Relative),
+            new { email = $"player-{Guid.NewGuid():N}@ether.local", password = "strong-password" });
         response.EnsureSuccessStatusCode();
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -23,13 +25,17 @@ public sealed class AccountEndpointsTests
         using var factory = EtherApiFactory.Create();
         using var client = factory.CreateClient();
 
-        var response = await client.PostAsJsonAsync(new Uri("/accounts", UriKind.Relative), new { });
+        var email = $"player-{Guid.NewGuid():N}@ether.local";
+        var response = await client.PostAsJsonAsync(
+            new Uri("/auth/register", UriKind.Relative),
+            new { email, password = "strong-password" });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var root = document.RootElement;
         Assert.NotEqual(Guid.Empty, root.GetProperty("accountId").GetGuid());
+        Assert.Equal(email, root.GetProperty("email").GetString());
         Assert.Equal("Active", root.GetProperty("status").GetString());
     }
 

@@ -35,7 +35,7 @@ public sealed class AuthenticationOptionsValidatorTests
             OptionsWith(AuthenticationOptions.DevelopmentPlaceholderSigningKey));
 
         Assert.True(result.Failed);
-        Assert.Contains("placeholder", result.FailureMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("development key", result.FailureMessage, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -12,7 +12,9 @@ public sealed class CharacterEndpointsTests
         using var factory = EtherApiFactory.Create();
         using var client = factory.CreateClient();
 
-        var accountResponse = await client.PostAsJsonAsync(new Uri("/accounts", UriKind.Relative), new { });
+        var accountResponse = await client.PostAsJsonAsync(
+            new Uri("/auth/register", UriKind.Relative),
+            new { email = $"player-{Guid.NewGuid():N}@ether.local", password = "strong-password" });
         using var accountDocument = JsonDocument.Parse(await accountResponse.Content.ReadAsStringAsync());
         var accountId = accountDocument.RootElement.GetProperty("accountId").GetGuid();
 

@@ -15,8 +15,10 @@ public sealed class GetAccountCharactersHandlerTests
     public async Task Returns_only_the_characters_of_the_account()
     {
         var persistence = new InMemoryPersistence();
-        var owner = Account.Create(DateTimeOffset.UtcNow);
-        var other = Account.Create(DateTimeOffset.UtcNow);
+        var owner = Account.Create(
+            new Email($"owner-{Guid.NewGuid():N}@ether.local"), new PasswordHash("hashed:x"), DateTimeOffset.UtcNow);
+        var other = Account.Create(
+            new Email($"other-{Guid.NewGuid():N}@ether.local"), new PasswordHash("hashed:x"), DateTimeOffset.UtcNow);
         await persistence.SeedAccountAsync(owner);
         await persistence.SeedAccountAsync(other);
 
@@ -39,7 +41,8 @@ public sealed class GetAccountCharactersHandlerTests
     public async Task Returns_an_empty_list_for_an_account_without_characters()
     {
         var persistence = new InMemoryPersistence();
-        var account = Account.Create(DateTimeOffset.UtcNow);
+        var account = Account.Create(
+            new Email($"acct-{Guid.NewGuid():N}@ether.local"), new PasswordHash("hashed:x"), DateTimeOffset.UtcNow);
         await persistence.SeedAccountAsync(account);
 
         var handler = new GetAccountCharactersHandler(persistence, persistence);

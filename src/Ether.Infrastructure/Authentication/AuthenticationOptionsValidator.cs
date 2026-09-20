@@ -37,10 +37,14 @@ public sealed class AuthenticationOptionsValidator : IValidateOptions<Authentica
         if (string.Equals(
                 options.SigningKey,
                 AuthenticationOptions.DevelopmentPlaceholderSigningKey,
+                StringComparison.Ordinal) ||
+            string.Equals(
+                options.SigningKey,
+                AuthenticationOptions.DevelopmentFallbackSigningKey,
                 StringComparison.Ordinal))
         {
             return ValidateOptionsResult.Fail(
-                "Authentication:SigningKey must not use the development placeholder value in Production.");
+                "Authentication:SigningKey must not use a development key value in Production.");
         }
 
         if (options.SigningKey.Length < AuthenticationOptions.MinimumSigningKeyLength)

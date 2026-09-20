@@ -6,6 +6,7 @@ using Ether.Infrastructure.Characters;
 using Ether.Infrastructure.Dependencies;
 using Ether.Infrastructure.Persistence;
 using Ether.Infrastructure.Redis;
+using Ether.Infrastructure.Security;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -81,6 +82,10 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddSingleton<RedisConnectionFactory>();
         services.AddSingleton<IDependencyReadinessProbe, DependencyReadinessProbe>();
+
+        // Security services (M2).
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<ITokenService, JwtTokenService>();
 
         // Repositories and unit of work depend on the always-registered EF Core context.
         services.AddScoped<IAccountRepository, EfAccountRepository>();

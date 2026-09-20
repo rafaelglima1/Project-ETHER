@@ -1,5 +1,6 @@
 using Ether.Application.Abstractions;
 using Ether.Application.Exceptions;
+using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
 using Ether.Infrastructure.Persistence.Configurations;
 
@@ -29,6 +30,10 @@ internal sealed class EfUnitOfWork : IUnitOfWork
             // The database unique constraint is the authority for name uniqueness.
             throw new DuplicateCharacterNameException(PendingCharacterName());
         }
+        catch (DbUpdateException exception) when (IsUniqueViolation(exception, AccountConfiguration.UniqueEmailIndex))
+        {
+            throw new DuplicateEmailException(PendingEmail());
+        }
     }
 
     private static bool IsUniqueViolation(DbUpdateException exception, string constraintName) =>
@@ -40,5 +45,11 @@ internal sealed class EfUnitOfWork : IUnitOfWork
         _context.ChangeTracker.Entries<Character>()
             .Where(entry => entry.State == EntityState.Added)
             .Select(entry => entry.Entity.Name)
+            .FirstOrDefault();
+
+    private string? PendingEmail() =>
+        _context.ChangeTracker.Entries<Account>()
+            .Where(entry => entry.State == EntityState.Added)
+            .Select(entry => entry.Entity.Email.Value)
             .FirstOrDefault();
 }

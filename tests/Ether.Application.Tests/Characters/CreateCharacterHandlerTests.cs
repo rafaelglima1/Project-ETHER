@@ -24,7 +24,10 @@ public sealed class CreateCharacterHandlerTests
 
     private static async Task<AccountId> SeedAccountAsync(InMemoryPersistence persistence)
     {
-        var account = Account.Create(DateTimeOffset.UtcNow);
+        var account = Account.Create(
+            new Email($"acct-{Guid.NewGuid():N}@ether.local"),
+            new PasswordHash("hashed:x"),
+            DateTimeOffset.UtcNow);
         await persistence.SeedAccountAsync(account);
         return account.Id;
     }

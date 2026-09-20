@@ -21,6 +21,9 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
     public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken) =>
         Task.FromResult(_accounts.SingleOrDefault(account => account.Id == accountId));
 
+    public Task<Account?> GetByEmailAsync(Email email, CancellationToken cancellationToken) =>
+        Task.FromResult(_accounts.SingleOrDefault(account => account.Email == email));
+
     public Task AddAsync(Character character, CancellationToken cancellationToken)
     {
         _pendingCharacters.Add(character);
@@ -40,6 +43,14 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
+        foreach (var account in _accounts)
+        {
+            if (_accounts.Count(existing => existing.Email == account.Email) > 1)
+            {
+                throw new DuplicateEmailException(account.Email.Value);
+            }
+        }
+
         foreach (var pending in _pendingCharacters)
         {
             if (_characters.Exists(character => string.Equals(character.Name, pending.Name, StringComparison.Ordinal)))

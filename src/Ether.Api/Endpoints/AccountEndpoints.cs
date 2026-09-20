@@ -1,26 +1,15 @@
-using Ether.Application.Accounts;
 using Ether.Application.Characters;
 using Ether.Contracts.Characters;
 using Ether.Domain.Accounts;
 
 namespace Ether.Api.Endpoints;
 
-/// <summary>Account and nested character endpoints (M1).</summary>
+/// <summary>Character endpoints nested under an account (M1).</summary>
 internal static class AccountEndpoints
 {
     public static IEndpointRouteBuilder MapAccountEndpoints(this IEndpointRouteBuilder app)
     {
         ArgumentNullException.ThrowIfNull(app);
-
-        app.MapPost("/accounts", async (
-                CreateAccountHandler handler,
-                CancellationToken cancellationToken) =>
-            {
-                var response = await handler.HandleAsync(cancellationToken).ConfigureAwait(false);
-                return Results.Created($"/accounts/{response.AccountId}/characters", response);
-            })
-            .WithName("CreateAccount")
-            .WithTags("Accounts");
 
         app.MapPost("/accounts/{accountId:guid}/characters", async (
                 Guid accountId,

@@ -20,4 +20,7 @@ internal sealed class EfAccountRepository : IAccountRepository
 
     public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken) =>
         _context.Accounts.FirstOrDefaultAsync(account => account.Id == accountId, cancellationToken);
+
+    public Task<Account?> GetByEmailAsync(Email email, CancellationToken cancellationToken) =>
+        _context.Accounts.FirstOrDefaultAsync(account => account.Email == email, cancellationToken);
 }
