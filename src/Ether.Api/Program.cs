@@ -1,3 +1,5 @@
+using Ether.Api.Endpoints;
+using Ether.Api.Errors;
 using Ether.Application.Abstractions;
 using Ether.Application.DependencyInjection;
 using Ether.Infrastructure.DependencyInjection;
@@ -8,7 +10,12 @@ builder.Services
     .AddEtherApplication()
     .AddEtherInfrastructure(builder.Configuration, builder.Environment.IsProduction());
 
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<EtherExceptionHandler>();
+
 var app = builder.Build();
+
+app.UseExceptionHandler();
 
 // Liveness: the process is up. Always 200 while the app is running.
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", service = "ether-api" }));
@@ -36,6 +43,9 @@ app.MapGet("/ready", async (IDependencyReadinessProbe probe, CancellationToken c
         ? Results.Ok(payload)
         : Results.Json(payload, statusCode: StatusCodes.Status503ServiceUnavailable);
 });
+
+app.MapAccountEndpoints();
+app.MapCharacterEndpoints();
 
 app.Run();
 

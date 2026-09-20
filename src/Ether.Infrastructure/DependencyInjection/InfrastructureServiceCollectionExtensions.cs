@@ -1,6 +1,8 @@
 using Ether.Application.Abstractions;
 using Ether.Contracts.Configuration;
+using Ether.Infrastructure.Accounts;
 using Ether.Infrastructure.Authentication;
+using Ether.Infrastructure.Characters;
 using Ether.Infrastructure.Dependencies;
 using Ether.Infrastructure.Persistence;
 using Ether.Infrastructure.Redis;
@@ -40,6 +42,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<RedisOptions>(configuration.GetSection(RedisOptions.SectionName));
         services.Configure<WebSocketOptions>(configuration.GetSection(WebSocketOptions.SectionName));
         services.Configure<GameServerOptions>(configuration.GetSection(GameServerOptions.SectionName));
+        services.Configure<CharacterOptions>(configuration.GetSection(CharacterOptions.SectionName));
 
         // Authentication options are validated at startup: in Production a usable
         // signing key is mandatory and the development placeholder is rejected.
@@ -52,25 +55,37 @@ public static class InfrastructureServiceCollectionExtensions
         var databaseOptions = configuration.GetSection(DatabaseOptions.SectionName).Get<DatabaseOptions>()
                               ?? new DatabaseOptions();
 
-        if (databaseOptions.IsConfigured)
+        // The context is always registered so the object graph is valid even when the
+        // database is not configured; readiness reports it as "not configured" and the
+        // provider only needs a connection string once a query actually runs.
+        services.AddDbContext<EtherDbContext>(options =>
         {
-            services.AddDbContext<EtherDbContext>(options =>
+            if (databaseOptions.IsConfigured)
             {
                 options.UseNpgsql(databaseOptions.ConnectionString, npgsql =>
                 {
                     npgsql.CommandTimeout(databaseOptions.CommandTimeoutSeconds);
                     npgsql.EnableRetryOnFailure(databaseOptions.MaxRetryCount);
                 });
+            }
+            else
+            {
+                options.UseNpgsql();
+            }
 
-                if (databaseOptions.EnableDetailedErrors)
-                {
-                    options.EnableDetailedErrors();
-                }
-            });
-        }
+            if (databaseOptions.EnableDetailedErrors)
+            {
+                options.EnableDetailedErrors();
+            }
+        });
 
         services.AddSingleton<RedisConnectionFactory>();
         services.AddSingleton<IDependencyReadinessProbe, DependencyReadinessProbe>();
+
+        // Repositories and unit of work depend on the always-registered EF Core context.
+        services.AddScoped<IAccountRepository, EfAccountRepository>();
+        services.AddScoped<ICharacterRepository, EfCharacterRepository>();
+        services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
         return services;
     }

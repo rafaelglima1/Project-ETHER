@@ -20,14 +20,17 @@ public sealed class InfrastructureServiceCollectionExtensionsTests
             .Build();
 
     [Fact]
-    public void Without_connection_strings_DbContext_is_not_registered()
+    public void Without_connection_strings_DbContext_is_still_registered()
     {
+        // The context is always registered so the object graph stays valid; readiness
+        // reports the database as "not configured" instead of failing to construct.
         var services = new ServiceCollection();
         services.AddEtherInfrastructure(EmptyConfiguration());
 
         using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
 
-        Assert.Null(provider.GetService<EtherDbContext>());
+        Assert.NotNull(scope.ServiceProvider.GetService<EtherDbContext>());
         Assert.NotNull(provider.GetService<RedisConnectionFactory>());
         Assert.NotNull(provider.GetService<IDependencyReadinessProbe>());
     }

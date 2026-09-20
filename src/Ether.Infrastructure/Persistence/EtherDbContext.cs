@@ -1,11 +1,13 @@
+using Ether.Domain.Accounts;
+using Ether.Domain.Characters;
+
 using Microsoft.EntityFrameworkCore;
 
 namespace Ether.Infrastructure.Persistence;
 
 /// <summary>
 /// Primary persistence context (PostgreSQL).
-/// Intentionally empty at M0: gameplay aggregate mappings are added per bounded
-/// context in their respective milestones. No gameplay tables are created here.
+/// M1 maps only Account and Character; later bounded contexts add their own mappings.
 /// </summary>
 public sealed class EtherDbContext : DbContext
 {
@@ -14,10 +16,16 @@ public sealed class EtherDbContext : DbContext
     {
     }
 
+    public DbSet<Account> Accounts => Set<Account>();
+
+    public DbSet<Character> Characters => Set<Character>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
 
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(EtherDbContext).Assembly);
     }
 }

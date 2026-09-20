@@ -21,7 +21,8 @@ for the canonical decisions fixed at M0.
 | Milestone | Scope | Status |
 | --- | --- | --- |
 | M0 | Solution, projects, architecture tests, health checks, Docker, CI | ✅ Done |
-| M1 | First character (account, auth, character, persistence) | ⏭ Next |
+| M1 | Account + Character foundation (persistence, use cases, HTTP) | ✅ Done |
+| M2 | First world (WebSocket, spawn, movement, snapshot/delta, reconnect) | ⏭ Next |
 | M2 | First world (WebSocket, spawn, movement, snapshot/delta, reconnect) | — |
 | M3 | First combat (creatures, AI, damage, death, loot) | — |
 | M4 | First progression (inventory, equipment, XP, level death/respawn) | — |
@@ -167,6 +168,29 @@ Health endpoints:
 
 With no dependency configured, `/ready` returns 200 and reports them as
 `not configured`.
+
+### M1 HTTP endpoints
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `POST` | `/accounts` | Create an account → `201` |
+| `POST` | `/accounts/{accountId}/characters` | Create a character → `201` |
+| `GET` | `/accounts/{accountId}/characters` | List an account's characters → `200` |
+| `GET` | `/characters/{characterId}` | Get a character → `200` |
+
+Character names are globally unique (enforced by a database constraint → `409`).
+Unknown account/character → `404`; invalid input → `400`. Authentication is not
+implemented yet (out of M1 scope). Persistence is PostgreSQL; the first migration
+is `InitialAccountCharacter`.
+
+Apply migrations (script-based, controlled — no automatic migration at runtime):
+
+```bash
+dotnet ef migrations script --idempotent \
+  --project src/Ether.Infrastructure --startup-project src/Ether.Infrastructure \
+  --output migrations.sql
+```
+
 
 ### Docker (optional locally, required on Oracle)
 
