@@ -1,0 +1,229 @@
+extends Node2D
+
+## World presentation scene (Blueprint v5.0 §49/§52).
+##
+## Renders a small placeholder map, spawns/updates/despawns entity views from
+## WorldState, and converts pointer input into movement/attack intents. It holds
+## no authoritative gameplay logic.
+
+var game: Node = null
+var world_state: WorldState
+var combat := CombatController.new()
+var input_controller: InputController
+var camera: CameraController
+var tile_size := 32
+
+const HUD_SCENE := preload("res://scenes/ui/hud.tscn")
+
+var _views: Dictionary = {}
+
+
+func _ready() -> void:
+	game = get_node_or_null("/root/GameClient")
+	if game != null:
+		world_state = game.world_state
+	else:
+		world_state = WorldState.new()
+
+	tile_size = int(world_state.map.get("tileSize", 32))
+
+	input_controller = InputController.new()
+	input_controller.name = "InputController"
+	add_child(input_controller)
+	input_controller.pointer_pressed.connect(_on_pointer_pressed)
+	input_controller.move_step.connect(_on_move_step)
+	input_controller.cancel_pressed.connect(_on_cancel_pressed)
+
+	camera = CameraController.new()
+	camera.name = "Camera"
+	add_child(camera)
+
+	add_child(HUD_SCENE.instantiate())
+
+	world_state.entity_upserted.connect(_on_entity_upserted)
+	world_state.entity_removed.connect(_on_entity_removed)
+	world_state.player_updated.connect(_on_player_updated)
+	world_state.snapshot_applied.connect(_on_snapshot_applied)
+	combat.target_changed.connect(_on_target_changed)
+
+	if game != null:
+		if game.has_signal("damage_dealt"):
+			game.damage_dealt.connect(_on_damage_dealt)
+		if game.has_signal("creature_defeated"):
+			game.creature_defeated.connect(_on_creature_defeated)
+
+	_sync_all()
+	_refresh_camera()
+	queue_redraw()
+
+
+# --- View lifecycle -----------------------------------------------------------
+
+func _sync_all() -> void:
+	for id in world_state.entities.keys():
+		_on_entity_upserted(String(id))
+
+
+func _on_entity_upserted(id: String) -> void:
+	var data := world_state.get_entity(id)
+	if data.is_empty():
+		return
+	if not _views.has(id):
+		_spawn_view(data)
+	var view: EntityView = _views[id]
+	if view != null and is_instance_valid(view):
+		view.update_from(data)
+
+
+func _spawn_view(data: Dictionary) -> void:
+	var kind := String(data.get("kind", "creature"))
+	var view: EntityView = Player.new() if kind == "player" else Creature.new()
+	view.name = "Entity_%s" % String(data.get("id", "")).replace("-", "_")
+	add_child(view)
+	view.setup(data, tile_size)
+	_views[String(data.get("id", ""))] = view
+
+
+func _on_entity_removed(id: String) -> void:
+	if _views.has(id):
+		var view: EntityView = _views[id]
+		_views.erase(id)
+		if view != null and is_instance_valid(view):
+			view.queue_free()
+	if combat.selected_target_id == id:
+		combat.clear_target()
+
+
+func _on_player_updated() -> void:
+	if camera.target == null:
+		_refresh_camera()
+	queue_redraw()
+
+
+func _on_snapshot_applied() -> void:
+	for id in _views.keys():
+		var view: EntityView = _views[id]
+		if view != null and is_instance_valid(view):
+			view.queue_free()
+	_views.clear()
+	tile_size = int(world_state.map.get("tileSize", tile_size))
+	_sync_all()
+	_refresh_camera()
+	queue_redraw()
+
+
+func _refresh_camera() -> void:
+	if world_state.map.is_empty():
+		return
+	var width := int(world_state.map.get("width", 0)) * tile_size
+	var height := int(world_state.map.get("height", 0)) * tile_size
+	camera.setup(_player_view_node(), Vector2(width, height))
+
+
+func _player_view_node() -> Node2D:
+	if _views.has(world_state.player_id):
+		return _views[world_state.player_id]
+	return null
+
+
+# --- Input --------------------------------------------------------------------
+
+func _on_pointer_pressed(screen_position: Vector2) -> void:
+	if world_state.map.is_empty():
+		return
+
+	var world_position := get_canvas_transform().affine_inverse() * screen_position
+	var tile := Vector2i(int(floor(world_position.x / tile_size)), int(floor(world_position.y / tile_size)))
+	var creature_id := world_state.creature_at(tile.x, tile.y)
+
+	if creature_id != "":
+		combat.select_target(creature_id)
+		if _is_adjacent(tile, world_state.player_position()):
+			_request_attack(creature_id)
+		else:
+			_request_move(tile.x, tile.y)
+	else:
+		combat.clear_target()
+		_request_move(tile.x, tile.y)
+	queue_redraw()
+
+
+func _on_move_step(direction: Vector2i) -> void:
+	var next := world_state.player_position() + direction
+	_request_move(next.x, next.y)
+
+
+func _on_cancel_pressed() -> void:
+	combat.clear_target()
+	queue_redraw()
+
+
+func _on_target_changed(_target_id: String) -> void:
+	queue_redraw()
+
+
+func _request_move(x: int, y: int) -> void:
+	game.request_move(x, y)
+
+
+func _request_attack(target_id: String) -> void:
+	game.request_attack(target_id)
+
+
+func _is_adjacent(a: Vector2i, b: Vector2i) -> bool:
+	return absi(a.x - b.x) + absi(a.y - b.y) <= 1
+
+
+# --- Feedback -----------------------------------------------------------------
+
+func _on_damage_dealt(target_id: String, amount: int, _hp: int, _max_hp: int) -> void:
+	if not world_state.has_entity(target_id):
+		return
+	var color := Color(1.0, 0.5, 0.4)
+	if target_id == world_state.player_id:
+		color = Color(1.0, 0.3, 0.3)
+	show_floating_text("-%d" % amount, world_state.entity_position(target_id), color)
+
+
+func _on_creature_defeated(target_id: String) -> void:
+	if not world_state.has_entity(target_id):
+		return
+	show_floating_text("Defeated!", world_state.entity_position(target_id), Color(1.0, 0.9, 0.4))
+
+
+func show_floating_text(text: String, tile: Vector2i, color: Color = Color.WHITE) -> void:
+	var label := Label.new()
+	label.text = text
+	label.add_theme_color_override("font_color", color)
+	label.add_theme_font_size_override("font_size", 16)
+	label.position = Vector2(tile.x * tile_size, tile.y * tile_size - 8)
+	add_child(label)
+	var tween := create_tween()
+	tween.tween_property(label, "position:y", label.position.y - 28.0, 0.7)
+	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.7)
+	tween.tween_callback(label.queue_free)
+
+
+# --- Rendering ----------------------------------------------------------------
+
+func _draw() -> void:
+	var map := world_state.map
+	if map.is_empty():
+		return
+
+	var width := int(map.get("width", 0))
+	var height := int(map.get("height", 0))
+	var extent := Vector2(width * tile_size, height * tile_size)
+
+	draw_rect(Rect2(Vector2.ZERO, extent), Color(0.10, 0.12, 0.16), true)
+	for x in range(width + 1):
+		draw_line(Vector2(x * tile_size, 0.0), Vector2(x * tile_size, extent.y), Color(0.16, 0.19, 0.24), 1.0)
+	for y in range(height + 1):
+		draw_line(Vector2(0.0, y * tile_size), Vector2(extent.x, y * tile_size), Color(0.16, 0.19, 0.24), 1.0)
+	draw_rect(Rect2(Vector2.ZERO, extent), Color(0.30, 0.50, 0.70), false, 2.0)
+
+	if combat.has_target() and world_state.has_entity(combat.selected_target_id):
+		var tile := world_state.entity_position(combat.selected_target_id)
+		draw_rect(
+			Rect2(Vector2(tile.x * tile_size, tile.y * tile_size), Vector2(tile_size, tile_size)),
+			Color(1.0, 0.85, 0.2, 0.6), false, 2.0)
