@@ -8,6 +8,15 @@ public sealed class AuthenticationOptions
 {
     public const string SectionName = "Authentication";
 
+    /// <summary>
+    /// Development-only placeholder used by docker-compose defaults.
+    /// It must never be accepted as a Production signing key.
+    /// </summary>
+    public const string DevelopmentPlaceholderSigningKey = "development-only-signing-key-change-me";
+
+    /// <summary>Minimum accepted signing key length in Production.</summary>
+    public const int MinimumSigningKeyLength = 32;
+
     public string Issuer { get; set; } = "ether";
 
     public string Audience { get; set; } = "ether-client";

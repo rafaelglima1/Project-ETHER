@@ -6,7 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddEtherApplication()
-    .AddEtherInfrastructure(builder.Configuration);
+    .AddEtherInfrastructure(builder.Configuration, builder.Environment.IsProduction());
 
 var app = builder.Build();
 

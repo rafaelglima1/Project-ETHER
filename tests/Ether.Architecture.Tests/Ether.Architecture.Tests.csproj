@@ -19,6 +19,7 @@
     <ProjectReference Include="..\..\src\Ether.Domain\Ether.Domain.csproj" />
     <ProjectReference Include="..\..\src\Ether.GameServer\Ether.GameServer.csproj" />
     <ProjectReference Include="..\..\src\Ether.Infrastructure\Ether.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Ether.Worker\Ether.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

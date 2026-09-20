@@ -6,7 +6,7 @@ var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services
     .AddEtherApplication()
-    .AddEtherInfrastructure(builder.Configuration);
+    .AddEtherInfrastructure(builder.Configuration, builder.Environment.IsProduction());
 
 builder.Services.AddHostedService<Worker>();
 

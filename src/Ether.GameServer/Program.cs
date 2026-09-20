@@ -11,7 +11,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddEtherApplication()
-    .AddEtherInfrastructure(builder.Configuration)
+    .AddEtherInfrastructure(builder.Configuration, builder.Environment.IsProduction())
     .AddEtherGameServer();
 
 var app = builder.Build();

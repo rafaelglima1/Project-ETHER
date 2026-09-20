@@ -103,13 +103,28 @@ docs/
 client/                   Godot client (future milestone)
 ```
 
+## Environments
+
+| Environment | Role |
+| --- | --- |
+| Windows (local) | **Development environment.** Code, build and tests run here. |
+| GitHub (`rafaelglima1/Project-ETHER`) | Versioning, audit and CI. |
+| Oracle Cloud | **Official runtime.** Where the project actually runs. |
+| Docker Engine + Docker Compose | **Official runtime technology on Oracle** (mandatory there). |
+| Docker Desktop | Optional for local development. **Not a project requirement.** |
+
+Container runtime validation (images, volumes, persistence, networking, restart,
+healthchecks) is performed on the **Oracle Cloud** environment. The absence of
+Docker Desktop on a Windows development machine does **not** block a milestone.
+
 ## Getting started
 
 ### Requirements
 
 - .NET SDK **10.0.400** (pinned in `global.json`)
-- Docker Desktop (for PostgreSQL/Redis and the compose stack)
 - Git
+- Docker Desktop — **optional**, only if you want the local compose stack
+  (PostgreSQL/Redis). Not required for build, test or development.
 
 ### Restore, build, test
 
@@ -151,7 +166,7 @@ Health endpoints:
 With no dependency configured, `/ready` returns 200 and reports them as
 `not configured`.
 
-### Docker
+### Docker (optional locally, required on Oracle)
 
 ```bash
 cp .env.example .env          # optional; adjust local values
@@ -161,7 +176,17 @@ docker compose down
 
 Services: `postgres`, `redis`, `api` (8080), `game-server` (8081), `worker`.
 
-> Docker Desktop must be running. The `.env` file is git-ignored — never commit it.
+> Docker Desktop is only needed to run the compose stack on Windows. If it is
+> not available, the runtime stack is validated on Oracle Cloud instead — this is
+> not a blocker. The `.env` file is git-ignored — never commit it.
+
+### Production signing key
+
+In `Production` the API, GameServer and Worker **fail fast at startup** if
+`Authentication:SigningKey` is missing, too short (minimum 32 characters) or set
+to the development placeholder (`development-only-signing-key-change-me`).
+Development and Test keep the convenient defaults.
+
 
 ## Configuration
 

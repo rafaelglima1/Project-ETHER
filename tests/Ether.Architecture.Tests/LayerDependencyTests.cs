@@ -13,6 +13,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly Infrastructure = Assembly.Load("Ether.Infrastructure");
     private static readonly Assembly Api = Assembly.Load("Ether.Api");
     private static readonly Assembly GameServer = Assembly.Load("Ether.GameServer");
+    private static readonly Assembly Worker = Assembly.Load("Ether.Worker");
 
     private static IEnumerable<Assembly> AllAssemblies
     {
@@ -24,6 +25,7 @@ public sealed class LayerDependencyTests
             yield return Infrastructure;
             yield return Api;
             yield return GameServer;
+            yield return Worker;
         }
     }
 
@@ -102,6 +104,19 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
+    public void Worker_must_not_depend_on_presentation_or_godot()
+    {
+        // Worker may depend on Application + Infrastructure (and transitively
+        // Contracts/Domain), but must not depend on presentation layers or the client.
+        AssertNoForbiddenDependencies(
+            Worker,
+            "Ether.Api",
+            "Ether.GameServer",
+            "Godot",
+            "Ether.Client");
+    }
+
+    [Fact]
     public void Api_must_not_depend_on_client_or_godot()
     {
         AssertNoForbiddenDependencies(Api, "Godot", "Ether.Client");
@@ -133,6 +148,14 @@ public sealed class LayerDependencyTests
         Assert.True(
             AssemblyDependencies.DependsOnNamespace(GameServer, "Ether.Infrastructure"),
             "GameServer must depend on Infrastructure.");
+
+        Assert.True(
+            AssemblyDependencies.DependsOnNamespace(Worker, "Ether.Infrastructure"),
+            "Worker must depend on Infrastructure.");
+
+        Assert.True(
+            AssemblyDependencies.DependsOnNamespace(Worker, "Ether.Application"),
+            "Worker must depend on Application.");
     }
 
     private static void AssertNoForbiddenDependencies(Assembly assembly, params string[] forbiddenRoots)
