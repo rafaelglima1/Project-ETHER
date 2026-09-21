@@ -24,24 +24,29 @@ public sealed class MovementCommandHandlerTests
             Guid.NewGuid(),
             sequence);
 
-    private static MovementCommandHandler CreateHandler(InMemoryPersistence persistence, int maxPerSecond = 20)
+    private static MovementCommandHandler CreateHandler(
+        InMemoryPersistence persistence,
+        int maxPerSecond = 20,
+        TimeProvider? timeProvider = null)
     {
+        var clock = timeProvider ?? TimeProvider.System;
+
         var move = new MoveCharacterHandler(
             persistence,
             persistence,
             new FakeWorldMapProvider(),
             Options.Create(World),
-            TimeProvider.System);
+            clock);
 
         return new MovementCommandHandler(
             move,
             new ProtocolSerializer(),
             Options.Create(new GameServerOptions { MaxMovementCommandsPerSecond = maxPerSecond }),
-            TimeProvider.System);
+            clock);
     }
 
     private static async Task<(MovementCommandHandler Handler, GameSession Session, CapturingResponder Responder)>
-        SetupInWorldAsync(InMemoryPersistence persistence, int maxPerSecond = 20)
+        SetupInWorldAsync(InMemoryPersistence persistence, TimeProvider? clock = null, int maxPerSecond = 20)
     {
         var (accountId, characterId) = await persistence.SeedCharacterAsync();
 
@@ -54,7 +59,7 @@ public sealed class MovementCommandHandlerTests
         session.MarkAuthenticated(accountId, characterId, DateTimeOffset.UtcNow);
         session.MarkInWorld(DateTimeOffset.UtcNow);
 
-        return (CreateHandler(persistence, maxPerSecond), session, new CapturingResponder());
+        return (CreateHandler(persistence, maxPerSecond, clock), session, new CapturingResponder());
     }
 
     [Fact]
@@ -125,11 +130,27 @@ public sealed class MovementCommandHandlerTests
     public async Task Rate_limit_is_enforced()
     {
         var persistence = new InMemoryPersistence();
-        var (handler, session, responder) = await SetupInWorldAsync(persistence, maxPerSecond: 1);
+        var fixedClock = new FixedTimeProvider(DateTimeOffset.UnixEpoch.AddHours(1));
+        var (handler, session, responder) = await SetupInWorldAsync(persistence, fixedClock, maxPerSecond: 1);
 
         await handler.HandleAsync(session, Command(1, 1), responder, CancellationToken.None);
         await handler.HandleAsync(session, Command(1, 1), responder, CancellationToken.None);
 
-        Assert.Equal(ProtocolErrorCodes.RateLimited, responder.Errors[^1].Code);
+        Assert.Equal(ProtocolErrorCodes.RateLimited, Assert.Single(responder.Errors).Code);
+    }
+
+    [Fact]
+    public async Task Rate_limit_resets_on_the_next_second()
+    {
+        var persistence = new InMemoryPersistence();
+        var fixedClock = new FixedTimeProvider(DateTimeOffset.UnixEpoch.AddHours(1));
+        var (handler, session, responder) = await SetupInWorldAsync(persistence, fixedClock, maxPerSecond: 1);
+
+        await handler.HandleAsync(session, Command(1, 1), responder, CancellationToken.None);
+        fixedClock.Advance(TimeSpan.FromSeconds(1));
+        await handler.HandleAsync(session, Command(1, 1, sequence: 2), responder, CancellationToken.None);
+
+        Assert.Empty(responder.Errors);
+        Assert.Equal(2, responder.Events.Count);
     }
 }
