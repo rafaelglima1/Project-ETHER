@@ -8,6 +8,14 @@ namespace Ether.Application.Auth;
 /// <summary>Use case: authenticate an account and issue a token pair.</summary>
 public sealed class LoginHandler
 {
+    /// <summary>
+    /// Well-formed PBKDF2-SHA256 hash used when the account does not exist, so the
+    /// same hashing work is always performed and the response time does not reveal
+    /// whether an email is registered.
+    /// </summary>
+    internal const string DummyPasswordHash =
+        "pbkdf2-sha256$210000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+
     private readonly IAccountRepository _accounts;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
@@ -42,8 +50,12 @@ public sealed class LoginHandler
 
         var account = await _accounts.GetByEmailAsync(email, cancellationToken).ConfigureAwait(false);
 
-        // Verify a dummy hash when the account is missing to keep timing similar.
-        if (account is null || !_passwordHasher.Verify(request.Password ?? string.Empty, account.PasswordHash.Value))
+        // Always run the hasher (against a dummy hash when the account is missing)
+        // so timing does not reveal whether the email exists.
+        var storedHash = account?.PasswordHash.Value ?? DummyPasswordHash;
+        var passwordValid = _passwordHasher.Verify(request.Password ?? string.Empty, storedHash);
+
+        if (account is null || !passwordValid)
         {
             throw new InvalidCredentialsException();
         }

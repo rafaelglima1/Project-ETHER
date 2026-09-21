@@ -41,6 +41,7 @@ public sealed class CreateCharacterHandlerTests
 
         var response = await handler.HandleAsync(
             accountId,
+            accountId,
             new CreateCharacterRequest("Aragorn", "Warrior"),
             CancellationToken.None);
 
@@ -61,9 +62,10 @@ public sealed class CreateCharacterHandlerTests
     {
         var persistence = new InMemoryPersistence();
         var handler = CreateHandler(persistence);
+        var accountId = AccountId.New();
 
         await Assert.ThrowsAsync<AccountNotFoundException>(() =>
-            handler.HandleAsync(AccountId.New(), new CreateCharacterRequest("Aragorn", "Warrior"), CancellationToken.None));
+            handler.HandleAsync(accountId, accountId, new CreateCharacterRequest("Aragorn", "Warrior"), CancellationToken.None));
     }
 
     [Theory]
@@ -76,7 +78,7 @@ public sealed class CreateCharacterHandlerTests
         var handler = CreateHandler(persistence);
 
         await Assert.ThrowsAsync<DomainException>(() =>
-            handler.HandleAsync(accountId, new CreateCharacterRequest(name, "Warrior"), CancellationToken.None));
+            handler.HandleAsync(accountId, accountId, new CreateCharacterRequest(name, "Warrior"), CancellationToken.None));
     }
 
     [Fact]
@@ -87,7 +89,7 @@ public sealed class CreateCharacterHandlerTests
         var handler = CreateHandler(persistence);
 
         await Assert.ThrowsAsync<DomainException>(() =>
-            handler.HandleAsync(accountId, new CreateCharacterRequest("Aragorn", "Wizard"), CancellationToken.None));
+            handler.HandleAsync(accountId, accountId, new CreateCharacterRequest("Aragorn", "Wizard"), CancellationToken.None));
     }
 
     [Fact]
@@ -97,9 +99,9 @@ public sealed class CreateCharacterHandlerTests
         var accountId = await SeedAccountAsync(persistence);
         var handler = CreateHandler(persistence);
 
-        await handler.HandleAsync(accountId, new CreateCharacterRequest("Aragorn", "Warrior"), CancellationToken.None);
+        await handler.HandleAsync(accountId, accountId, new CreateCharacterRequest("Aragorn", "Warrior"), CancellationToken.None);
 
         await Assert.ThrowsAsync<DuplicateCharacterNameException>(() =>
-            handler.HandleAsync(accountId, new CreateCharacterRequest("Aragorn", "Ranger"), CancellationToken.None));
+            handler.HandleAsync(accountId, accountId, new CreateCharacterRequest("Aragorn", "Ranger"), CancellationToken.None));
     }
 }

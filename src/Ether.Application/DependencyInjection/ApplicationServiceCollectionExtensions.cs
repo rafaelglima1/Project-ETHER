@@ -27,6 +27,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<GetAccountCharactersHandler>();
         services.AddScoped<EnterWorldHandler>();
         services.AddScoped<MoveCharacterHandler>();
+        services.AddScoped<IssueGameTokenHandler>();
 
         return services;
     }

@@ -1,6 +1,7 @@
 using Ether.Application.Abstractions;
 using Ether.Contracts.Characters;
 using Ether.Contracts.Configuration;
+using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
 using Ether.Domain.World;
 
@@ -34,6 +35,7 @@ public sealed class MoveCharacterHandler
     }
 
     public async Task<CharacterResponse> HandleAsync(
+        AccountId authenticatedAccountId,
         CharacterId characterId,
         MoveCharacterRequest request,
         CancellationToken cancellationToken)
@@ -42,6 +44,11 @@ public sealed class MoveCharacterHandler
 
         var character = await _characters.GetByIdAsync(characterId, cancellationToken).ConfigureAwait(false)
                         ?? throw new Exceptions.CharacterNotFoundException(characterId);
+
+        if (character.AccountId != authenticatedAccountId)
+        {
+            throw new Exceptions.ForbiddenException("Character does not belong to the authenticated account.");
+        }
 
         var map = _maps.GetMap(character.MapId);
         var destination = new WorldPosition(map.Id, request.X, request.Y);

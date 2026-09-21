@@ -1,5 +1,6 @@
 using Ether.Application.Abstractions;
 using Ether.Contracts.Characters;
+using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
 
 namespace Ether.Application.Characters;
@@ -21,10 +22,18 @@ public sealed class EnterWorldHandler
         _timeProvider = timeProvider;
     }
 
-    public async Task<CharacterResponse> HandleAsync(CharacterId characterId, CancellationToken cancellationToken)
+    public async Task<CharacterResponse> HandleAsync(
+        AccountId authenticatedAccountId,
+        CharacterId characterId,
+        CancellationToken cancellationToken)
     {
         var character = await _characters.GetByIdAsync(characterId, cancellationToken).ConfigureAwait(false)
                         ?? throw new Exceptions.CharacterNotFoundException(characterId);
+
+        if (character.AccountId != authenticatedAccountId)
+        {
+            throw new Exceptions.ForbiddenException("Character does not belong to the authenticated account.");
+        }
 
         character.EnterWorld(_timeProvider.GetUtcNow());
 

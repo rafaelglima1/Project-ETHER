@@ -7,8 +7,13 @@ internal sealed class FakePasswordHasher : IPasswordHasher
 {
     public const string Prefix = "hashed:";
 
+    public int VerifyCallCount { get; private set; }
+
     public string Hash(string password) => Prefix + password;
 
-    public bool Verify(string password, string passwordHash) =>
-        string.Equals(passwordHash, Prefix + password, StringComparison.Ordinal);
+    public bool Verify(string password, string passwordHash)
+    {
+        VerifyCallCount++;
+        return string.Equals(passwordHash, Prefix + password, StringComparison.Ordinal);
+    }
 }

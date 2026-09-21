@@ -15,7 +15,8 @@ public sealed class MovementHandlerTests
 {
     private static readonly WorldOptions WorldOptions = new() { Width = 32, Height = 32, MaxMoveDistance = 12 };
 
-    private static async Task<(InMemoryPersistence Persistence, CharacterId CharacterId)> SeedInWorldCharacterAsync()
+    private static async Task<(InMemoryPersistence Persistence, AccountId AccountId, CharacterId CharacterId)>
+        SeedInWorldCharacterAsync()
     {
         var persistence = new InMemoryPersistence();
         var account = Account.Create(
@@ -26,13 +27,13 @@ public sealed class MovementHandlerTests
             persistence, persistence, persistence, TimeProvider.System, Options.Create(new CharacterOptions()));
 
         var created = await create.HandleAsync(
-            account.Id, new CreateCharacterRequest("Mover", "Warrior"), CancellationToken.None);
+            account.Id, account.Id, new CreateCharacterRequest("Mover", "Warrior"), CancellationToken.None);
 
         var characterId = new CharacterId(created.CharacterId);
         var enter = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
-        await enter.HandleAsync(characterId, CancellationToken.None);
+        await enter.HandleAsync(account.Id, characterId, CancellationToken.None);
 
-        return (persistence, characterId);
+        return (persistence, account.Id, characterId);
     }
 
     private static MoveCharacterHandler MoveHandler(InMemoryPersistence persistence) =>
@@ -46,9 +47,10 @@ public sealed class MovementHandlerTests
     [Fact]
     public async Task Enter_world_returns_the_in_world_state()
     {
-        var (persistence, characterId) = await SeedInWorldCharacterAsync();
+        var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
-        var response = await new GetCharacterHandler(persistence).HandleAsync(characterId, CancellationToken.None);
+        var response = await new GetCharacterHandler(persistence)
+            .HandleAsync(accountId, characterId, CancellationToken.None);
 
         Assert.Equal("InWorld", response.State);
     }
@@ -56,10 +58,10 @@ public sealed class MovementHandlerTests
     [Fact]
     public async Task Valid_move_updates_the_position()
     {
-        var (persistence, characterId) = await SeedInWorldCharacterAsync();
+        var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
         var response = await MoveHandler(persistence)
-            .HandleAsync(characterId, new MoveCharacterRequest(4, 6), CancellationToken.None);
+            .HandleAsync(accountId, characterId, new MoveCharacterRequest(4, 6), CancellationToken.None);
 
         Assert.Equal(4, response.PositionX);
         Assert.Equal(6, response.PositionY);
@@ -68,19 +70,19 @@ public sealed class MovementHandlerTests
     [Fact]
     public async Task Move_beyond_max_distance_is_rejected()
     {
-        var (persistence, characterId) = await SeedInWorldCharacterAsync();
+        var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
         await Assert.ThrowsAsync<DomainException>(() =>
-            MoveHandler(persistence).HandleAsync(characterId, new MoveCharacterRequest(30, 0), CancellationToken.None));
+            MoveHandler(persistence).HandleAsync(accountId, characterId, new MoveCharacterRequest(30, 0), CancellationToken.None));
     }
 
     [Fact]
     public async Task Move_outside_the_map_is_rejected()
     {
-        var (persistence, characterId) = await SeedInWorldCharacterAsync();
+        var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
         await Assert.ThrowsAsync<DomainException>(() =>
-            MoveHandler(persistence).HandleAsync(characterId, new MoveCharacterRequest(100, 0), CancellationToken.None));
+            MoveHandler(persistence).HandleAsync(accountId, characterId, new MoveCharacterRequest(100, 0), CancellationToken.None));
     }
 
     [Fact]
@@ -89,6 +91,15 @@ public sealed class MovementHandlerTests
         var persistence = new InMemoryPersistence();
 
         await Assert.ThrowsAsync<CharacterNotFoundException>(() =>
-            MoveHandler(persistence).HandleAsync(CharacterId.New(), new MoveCharacterRequest(1, 1), CancellationToken.None));
+            MoveHandler(persistence).HandleAsync(AccountId.New(), CharacterId.New(), new MoveCharacterRequest(1, 1), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Move_of_another_accounts_character_is_forbidden()
+    {
+        var (persistence, _, characterId) = await SeedInWorldCharacterAsync();
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            MoveHandler(persistence).HandleAsync(AccountId.New(), characterId, new MoveCharacterRequest(1, 1), CancellationToken.None));
     }
 }

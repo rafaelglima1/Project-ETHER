@@ -167,7 +167,11 @@ public sealed class Character
         UpdatedAt = nowUtc;
     }
 
-    /// <summary>Places the character into the world (loading → in world).</summary>
+    /// <summary>
+    /// Places the character into the world. The lifecycle always passes through
+    /// <see cref="CharacterState.Loading"/> so a single state machine governs
+    /// every transition.
+    /// </summary>
     public void EnterWorld(DateTimeOffset nowUtc)
     {
         if (State == CharacterState.InWorld)
@@ -180,8 +184,8 @@ public sealed class Character
             throw new DomainException($"Character cannot enter the world from state {State}.");
         }
 
-        State = CharacterState.InWorld;
-        UpdatedAt = nowUtc;
+        ChangeState(CharacterState.Loading, nowUtc);
+        ChangeState(CharacterState.InWorld, nowUtc);
     }
 
     /// <summary>Marks the character as offline (leaving the world).</summary>
@@ -192,8 +196,7 @@ public sealed class Character
             return;
         }
 
-        State = CharacterState.Offline;
-        UpdatedAt = nowUtc;
+        ChangeState(CharacterState.Offline, nowUtc);
     }
 
     private static string NormalizeName(string name)

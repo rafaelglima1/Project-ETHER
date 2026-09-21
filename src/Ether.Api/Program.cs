@@ -41,6 +41,21 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30),
             NameClaimType = "sub",
         };
+
+        // Only access tokens may be used as HTTP bearer credentials; refresh and
+        // game tokens are rejected even though they are validly signed.
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                if (!string.Equals(context.Principal?.FindFirst("use")?.Value, "access", StringComparison.Ordinal))
+                {
+                    context.Fail("Token is not an access token.");
+                }
+
+                return Task.CompletedTask;
+            },
+        };
     });
 
 builder.Services.AddAuthorization();

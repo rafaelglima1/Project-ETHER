@@ -18,9 +18,15 @@ public sealed class GetAccountCharactersHandler
     }
 
     public async Task<IReadOnlyList<CharacterResponse>> HandleAsync(
+        AccountId authenticatedAccountId,
         AccountId accountId,
         CancellationToken cancellationToken)
     {
+        if (authenticatedAccountId != accountId)
+        {
+            throw new ForbiddenException("Cannot read characters of another account.");
+        }
+
         var account = await _accounts.GetByIdAsync(accountId, cancellationToken).ConfigureAwait(false)
                       ?? throw new AccountNotFoundException(accountId);
 

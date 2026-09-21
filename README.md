@@ -14,20 +14,22 @@ The current technical contract is **Blueprint v5.0**.
 
 **Milestone M0 — Foundation.**
 
-M0 delivers a clean, compilable, testable base for the project. No gameplay is
-implemented. See [`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md)
-for the canonical decisions fixed at M0.
+M0, M1, M2 and M3 are complete. The next work item is the GameServer WebSocket
+(first realtime world). See [`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md)
+and [`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md)
+for canonical decisions.
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
 | M0 | Solution, projects, architecture tests, health checks, Docker, CI | ✅ Done |
 | M1 | Account + Character foundation (persistence, use cases, HTTP) | ✅ Done |
-| M2 | First world (WebSocket, spawn, movement, snapshot/delta, reconnect) | ⏭ Next |
-| M2 | First world (WebSocket, spawn, movement, snapshot/delta, reconnect) | — |
-| M3 | First combat (creatures, AI, damage, death, loot) | — |
-| M4 | First progression (inventory, equipment, XP, level death/respawn) | — |
-| M5 | First social (two players, chat, party) | — |
-| M6 | First quest (NPC, dialogue, objectives, rewards) | — |
+| M2 | Auth/session foundation (credentials, JWT access/refresh, game token) | ✅ Done |
+| M3 | World/movement foundation (bounded map, enter world, authoritative move) | ✅ Done |
+| M4 | GameServer WebSocket / first realtime world | ⏭ Next |
+| Later | Combat, creatures + AI, XP, loot, inventory | — |
+
+> WebSocket gameplay is **not implemented yet**. The functional surface today is
+> HTTP only (see endpoints below).
 
 ## Architecture
 
@@ -169,19 +171,48 @@ Health endpoints:
 With no dependency configured, `/ready` returns 200 and reports them as
 `not configured`.
 
-### M1 HTTP endpoints
+### HTTP endpoints
+
+Authentication:
+
+| Method | Route | Auth | Description |
+| --- | --- | --- | --- |
+| `POST` | `/auth/register` | — | Register an account → `201` |
+| `POST` | `/auth/login` | — | Login → `200` access + refresh tokens |
+| `POST` | `/auth/refresh` | — | Exchange a refresh token → `200` new pair |
+| `GET` | `/auth/me` | Bearer (access) | Current account → `200` |
+
+Accounts and characters (all require a Bearer **access** token):
 
 | Method | Route | Description |
 | --- | --- | --- |
-| `POST` | `/accounts` | Create an account → `201` |
 | `POST` | `/accounts/{accountId}/characters` | Create a character → `201` |
-| `GET` | `/accounts/{accountId}/characters` | List an account's characters → `200` |
+| `GET` | `/accounts/{accountId}/characters` | List characters → `200` |
 | `GET` | `/characters/{characterId}` | Get a character → `200` |
+| `POST` | `/characters/{characterId}/enter` | Enter the world → `200` |
+| `POST` | `/characters/{characterId}/move` | Move (server-validated) → `200` |
+| `POST` | `/characters/{characterId}/game-token` | Issue a game token → `200` |
 
-Character names are globally unique (enforced by a database constraint → `409`).
-Unknown account/character → `404`; invalid input → `400`. Authentication is not
-implemented yet (out of M1 scope). Persistence is PostgreSQL; the first migration
-is `InitialAccountCharacter`.
+Rules and status codes:
+
+- Every character/account endpoint requires authentication → `401` without a token.
+- Ownership is enforced: an account can only access its own characters, and the
+  `accountId` in the token must match the route → `403` otherwise.
+- Character names are globally unique (database constraint) → `409`.
+- Unknown character → `404`; invalid input → `400`; unknown email/password → `401`.
+- Tokens are purpose-scoped: refresh tokens and game tokens are **rejected** as
+  bearer credentials.
+
+### Game token
+
+`POST /characters/{characterId}/game-token` returns a short-lived JWT
+(`Authentication:GameTokenLifetimeMinutes`, default 5) whose claims carry
+`accountId` and `characterId` with `use=game`. It is the credential the
+**GameServer WebSocket** will consume. The WebSocket endpoint itself is not
+implemented yet.
+
+Persistence is PostgreSQL; migrations are `InitialAccountCharacter` and
+`AddAccountCredentials`.
 
 Apply migrations (script-based, controlled — no automatic migration at runtime):
 

@@ -37,11 +37,17 @@ public sealed class CreateCharacterHandler
     }
 
     public async Task<CharacterResponse> HandleAsync(
+        AccountId authenticatedAccountId,
         AccountId accountId,
         CreateCharacterRequest request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (authenticatedAccountId != accountId)
+        {
+            throw new ForbiddenException("Cannot create a character for another account.");
+        }
 
         var account = await _accounts.GetByIdAsync(accountId, cancellationToken).ConfigureAwait(false);
         if (account is null)

@@ -1,6 +1,7 @@
 using Ether.Application.Abstractions;
 using Ether.Application.Exceptions;
 using Ether.Contracts.Characters;
+using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
 
 namespace Ether.Application.Characters;
@@ -16,11 +17,17 @@ public sealed class GetCharacterHandler
     }
 
     public async Task<CharacterResponse> HandleAsync(
+        AccountId authenticatedAccountId,
         CharacterId characterId,
         CancellationToken cancellationToken)
     {
         var character = await _characters.GetByIdAsync(characterId, cancellationToken).ConfigureAwait(false)
                         ?? throw new CharacterNotFoundException(characterId);
+
+        if (character.AccountId != authenticatedAccountId)
+        {
+            throw new ForbiddenException("Character does not belong to the authenticated account.");
+        }
 
         return CharacterMapping.ToResponse(character);
     }

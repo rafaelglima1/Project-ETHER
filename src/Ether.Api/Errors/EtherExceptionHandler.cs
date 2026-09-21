@@ -26,6 +26,7 @@ internal sealed class EtherExceptionHandler : IExceptionHandler
             DuplicateEmailException => StatusCodes.Status409Conflict,
             InvalidCredentialsException => StatusCodes.Status401Unauthorized,
             InvalidTokenException => StatusCodes.Status401Unauthorized,
+            ForbiddenException => StatusCodes.Status403Forbidden,
             _ => StatusCodes.Status500InternalServerError,
         };
 
@@ -51,6 +52,7 @@ internal sealed class EtherExceptionHandler : IExceptionHandler
     {
         StatusCodes.Status400BadRequest => "Bad Request",
         StatusCodes.Status401Unauthorized => "Unauthorized",
+        StatusCodes.Status403Forbidden => "Forbidden",
         StatusCodes.Status404NotFound => "Not Found",
         StatusCodes.Status409Conflict => "Conflict",
         _ => "Error",

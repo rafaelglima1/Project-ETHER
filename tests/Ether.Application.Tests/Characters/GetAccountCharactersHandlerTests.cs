@@ -25,13 +25,13 @@ public sealed class GetAccountCharactersHandlerTests
         var create = new CreateCharacterHandler(
             persistence, persistence, persistence, TimeProvider.System, Options.Create(new CharacterOptions()));
 
-        await create.HandleAsync(owner.Id, new CreateCharacterRequest("Frodo", "Warrior"), CancellationToken.None);
-        await create.HandleAsync(owner.Id, new CreateCharacterRequest("Sam", "Warrior"), CancellationToken.None);
-        await create.HandleAsync(other.Id, new CreateCharacterRequest("Gollum", "Ranger"), CancellationToken.None);
+        await create.HandleAsync(owner.Id, owner.Id, new CreateCharacterRequest("Frodo", "Warrior"), CancellationToken.None);
+        await create.HandleAsync(owner.Id, owner.Id, new CreateCharacterRequest("Sam", "Warrior"), CancellationToken.None);
+        await create.HandleAsync(other.Id, other.Id, new CreateCharacterRequest("Gollum", "Ranger"), CancellationToken.None);
 
         var handler = new GetAccountCharactersHandler(persistence, persistence);
 
-        var response = await handler.HandleAsync(owner.Id, CancellationToken.None);
+        var response = await handler.HandleAsync(owner.Id, owner.Id, CancellationToken.None);
 
         Assert.Equal(2, response.Count);
         Assert.All(response, character => Assert.Equal(owner.Id.Value, character.AccountId));
@@ -47,7 +47,7 @@ public sealed class GetAccountCharactersHandlerTests
 
         var handler = new GetAccountCharactersHandler(persistence, persistence);
 
-        var response = await handler.HandleAsync(account.Id, CancellationToken.None);
+        var response = await handler.HandleAsync(account.Id, account.Id, CancellationToken.None);
 
         Assert.Empty(response);
     }
@@ -57,8 +57,19 @@ public sealed class GetAccountCharactersHandlerTests
     {
         var persistence = new InMemoryPersistence();
         var handler = new GetAccountCharactersHandler(persistence, persistence);
+        var accountId = AccountId.New();
 
         await Assert.ThrowsAsync<AccountNotFoundException>(() =>
-            handler.HandleAsync(AccountId.New(), CancellationToken.None));
+            handler.HandleAsync(accountId, accountId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Fails_when_requesting_another_account()
+    {
+        var persistence = new InMemoryPersistence();
+        var handler = new GetAccountCharactersHandler(persistence, persistence);
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            handler.HandleAsync(AccountId.New(), AccountId.New(), CancellationToken.None));
     }
 }
