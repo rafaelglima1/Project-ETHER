@@ -22,9 +22,26 @@ public interface ITokenService
     /// <summary>Issues a short-lived token for the game server connection.</summary>
     IssuedToken CreateGameToken(AccountId accountId, Guid characterId);
 
-    /// <summary>Validates a game token and returns its claims, if valid.</summary>
-    GameTokenClaims? ValidateGameToken(string token);
+    /// <summary>Validates a game token, distinguishing the failure reason.</summary>
+    GameTokenValidation ValidateGameToken(string token);
 }
 
 /// <summary>Claims carried by a game session token.</summary>
 public readonly record struct GameTokenClaims(AccountId AccountId, Guid CharacterId);
+
+/// <summary>Outcome of a game token validation.</summary>
+public enum TokenValidationStatus
+{
+    Valid = 0,
+    Invalid = 1,
+    Expired = 2,
+    WrongPurpose = 3,
+}
+
+/// <summary>Result of validating a game token.</summary>
+public readonly record struct GameTokenValidation(TokenValidationStatus Status, GameTokenClaims? Claims)
+{
+    public static GameTokenValidation Valid(GameTokenClaims claims) => new(TokenValidationStatus.Valid, claims);
+
+    public static GameTokenValidation Failure(TokenValidationStatus status) => new(status, null);
+}

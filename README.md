@@ -14,10 +14,10 @@ The current technical contract is **Blueprint v5.0**.
 
 **Milestone M0 — Foundation.**
 
-M0, M1, M2 and M3 are complete. The next work item is the GameServer WebSocket
-(first realtime world). See [`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md)
-and [`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md)
-for canonical decisions.
+M0, M1, M2, M3 and M4 are complete. The next work item is combat (M5). See
+[`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md),
+[`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md)
+and [`docs/decisions/ADR-0003`](docs/decisions/ADR-0003-realtime-protocol.md).
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
@@ -25,11 +25,26 @@ for canonical decisions.
 | M1 | Account + Character foundation (persistence, use cases, HTTP) | ✅ Done |
 | M2 | Auth/session foundation (credentials, JWT access/refresh, game token) | ✅ Done |
 | M3 | World/movement foundation (bounded map, enter world, authoritative move) | ✅ Done |
-| M4 | GameServer WebSocket / first realtime world | ⏭ Next |
-| Later | Combat, creatures + AI, XP, loot, inventory | — |
+| M4 | GameServer WebSocket / first realtime world | ✅ Done |
+| M5 | Combat foundation | ⏭ Next |
+| Later | Creatures + AI, XP, loot, inventory | — |
 
-> WebSocket gameplay is **not implemented yet**. The functional surface today is
-> HTTP only (see endpoints below).
+### Realtime (GameServer WebSocket)
+
+`GET /game` (WebSocket, `WebSocket:Path`) is the canonical realtime endpoint; the
+envelope, message names, error codes, session lifecycle, heartbeat, sequence and
+authority rules are defined in **ADR-0003**. Flow:
+
+```
+connect → game.authenticate (game token) → game.authenticated
+        → world.enter → world.snapshot
+        → movement.move → movement.accepted | movement.rejected
+        → system.ping → system.pong
+```
+
+Access and refresh tokens are rejected at authentication; the character identity
+used by the server always comes from the token, never from client input.
+
 
 ## Architecture
 

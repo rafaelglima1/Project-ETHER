@@ -1,0 +1,76 @@
+using Ether.Application.Abstractions;
+using Ether.Application.Exceptions;
+using Ether.Domain.Accounts;
+using Ether.Domain.Characters;
+
+namespace Ether.GameServer.Tests.Fakes;
+
+/// <summary>In-memory persistence used by GameServer unit and integration tests.</summary>
+internal sealed class InMemoryPersistence : IAccountRepository, ICharacterRepository, IUnitOfWork
+{
+    private readonly List<Account> _accounts = [];
+    private readonly List<Character> _characters = [];
+    private readonly List<Character> _pendingCharacters = [];
+
+    public Task AddAsync(Account account, CancellationToken cancellationToken)
+    {
+        _accounts.Add(account);
+        return Task.CompletedTask;
+    }
+
+    public Task<Account?> GetByIdAsync(AccountId accountId, CancellationToken cancellationToken) =>
+        Task.FromResult(_accounts.SingleOrDefault(account => account.Id == accountId));
+
+    public Task<Account?> GetByEmailAsync(Email email, CancellationToken cancellationToken) =>
+        Task.FromResult(_accounts.SingleOrDefault(account => account.Email == email));
+
+    public Task AddAsync(Character character, CancellationToken cancellationToken)
+    {
+        _pendingCharacters.Add(character);
+        return Task.CompletedTask;
+    }
+
+    public Task<Character?> GetByIdAsync(CharacterId characterId, CancellationToken cancellationToken) =>
+        Task.FromResult(_characters.SingleOrDefault(character => character.Id == characterId));
+
+    public Task<IReadOnlyList<Character>> GetByAccountIdAsync(
+        AccountId accountId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Character>>(
+            _characters.Where(character => character.AccountId == accountId).ToList());
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken)
+    {
+        foreach (var pending in _pendingCharacters)
+        {
+            if (_characters.Exists(character => string.Equals(character.Name, pending.Name, StringComparison.Ordinal)))
+            {
+                throw new DuplicateCharacterNameException(pending.Name);
+            }
+        }
+
+        _characters.AddRange(_pendingCharacters);
+        _pendingCharacters.Clear();
+        return Task.CompletedTask;
+    }
+
+    public async Task<(AccountId AccountId, CharacterId CharacterId)> SeedCharacterAsync(string name = "Hero")
+    {
+        var account = Account.Create(
+            new Email($"acct-{Guid.NewGuid():N}@ether.local"),
+            new PasswordHash("hashed:x"),
+            DateTimeOffset.UtcNow);
+        await AddAsync(account, CancellationToken.None);
+
+        var character = Character.Create(
+            account.Id,
+            name,
+            CharacterClass.Warrior,
+            new Ether.Domain.World.WorldPosition(new Ether.Domain.World.MapId(1), 0, 0),
+            DateTimeOffset.UtcNow);
+        await AddAsync(character, CancellationToken.None);
+        await SaveChangesAsync(CancellationToken.None);
+
+        return (account.Id, character.Id);
+    }
+}

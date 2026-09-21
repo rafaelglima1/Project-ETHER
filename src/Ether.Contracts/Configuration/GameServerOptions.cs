@@ -19,4 +19,22 @@ public sealed class GameServerOptions
 
     /// <summary>Grace period after disconnect before persisting safe state, in seconds.</summary>
     public int DisconnectGraceSeconds { get; set; } = 30;
+
+    /// <summary>Server heartbeat interval, in seconds.</summary>
+    public int HeartbeatIntervalSeconds { get; set; } = 20;
+
+    /// <summary>Maximum silence before a session is considered dead, in seconds.</summary>
+    public int ConnectionTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>Maximum accepted inbound frame size, in bytes.</summary>
+    public int MaxMessageSizeBytes { get; set; } = 16 * 1024;
+
+    /// <summary>Maximum concurrent realtime sessions.</summary>
+    public int MaxConnections { get; set; } = 1000;
+
+    /// <summary>Maximum accepted movement commands per session per second.</summary>
+    public int MaxMovementCommandsPerSecond { get; set; } = 20;
+
+    /// <summary>Maximum queued commands per session before new ones are dropped.</summary>
+    public int MaxQueuedCommands { get; set; } = 256;
 }

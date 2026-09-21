@@ -27,19 +27,19 @@ internal sealed class FakeTokenService : ITokenService
     public IssuedToken CreateGameToken(AccountId accountId, Guid characterId) =>
         new($"game:{accountId.Value}:{characterId}", FixedExpiry);
 
-    public GameTokenClaims? ValidateGameToken(string token)
+    public GameTokenValidation ValidateGameToken(string token)
     {
         if (token is null || !token.StartsWith("game:", StringComparison.Ordinal))
         {
-            return null;
+            return GameTokenValidation.Failure(TokenValidationStatus.Invalid);
         }
 
         var parts = token.Split(':');
         if (parts.Length != 3 || !Guid.TryParse(parts[1], out var accountId) || !Guid.TryParse(parts[2], out var characterId))
         {
-            return null;
+            return GameTokenValidation.Failure(TokenValidationStatus.Invalid);
         }
 
-        return new GameTokenClaims(new AccountId(accountId), characterId);
+        return GameTokenValidation.Valid(new GameTokenClaims(new AccountId(accountId), characterId));
     }
 }

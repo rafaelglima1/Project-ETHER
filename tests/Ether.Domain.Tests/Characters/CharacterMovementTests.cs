@@ -55,7 +55,7 @@ public sealed class CharacterMovementTests
     {
         var character = CreateInWorld();
 
-        Assert.Throws<DomainException>(() =>
+        Assert.ThrowsAny<DomainException>(() =>
             character.MoveTo(new WorldPosition(new MapId(1), 20, 0), maxDistance: 12, Map, Now));
     }
 
@@ -64,7 +64,7 @@ public sealed class CharacterMovementTests
     {
         var character = CreateInWorld();
 
-        Assert.Throws<DomainException>(() =>
+        Assert.ThrowsAny<DomainException>(() =>
             character.MoveTo(new WorldPosition(new MapId(1), 40, 0), maxDistance: 12, Map, Now));
     }
 
@@ -74,7 +74,7 @@ public sealed class CharacterMovementTests
         var character = Character.Create(
             AccountId.New(), "Idle", CharacterClass.Warrior, new WorldPosition(new MapId(1), 0, 0), Now);
 
-        Assert.Throws<DomainException>(() =>
+        Assert.ThrowsAny<DomainException>(() =>
             character.MoveTo(new WorldPosition(new MapId(1), 1, 1), maxDistance: 12, Map, Now));
     }
 }

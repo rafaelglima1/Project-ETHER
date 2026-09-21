@@ -24,14 +24,12 @@ public sealed class GameServerEndpointTests : IClassFixture<WebApplicationFactor
     }
 
     [Fact]
-    public async Task Game_endpoint_is_exposed_but_websocket_is_not_implemented_yet()
+    public async Task Game_endpoint_requires_a_websocket_upgrade()
     {
         using var client = _factory.CreateClient();
 
         var response = await client.GetAsync(new Uri("/game", UriKind.Relative));
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("websocket-not-implemented", body, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 }

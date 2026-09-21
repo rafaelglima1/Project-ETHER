@@ -117,6 +117,18 @@ public sealed class LayerDependencyTests
     }
 
     [Fact]
+    public void GameServer_must_not_depend_on_entity_framework()
+    {
+        // The realtime transport must not touch the database directly; persistence
+        // goes through Application abstractions implemented by Infrastructure.
+        AssertNoForbiddenDependencies(
+            GameServer,
+            "Microsoft.EntityFrameworkCore",
+            "Npgsql",
+            "Ether.Infrastructure.Persistence");
+    }
+
+    [Fact]
     public void Api_must_not_depend_on_client_or_godot()
     {
         AssertNoForbiddenDependencies(Api, "Godot", "Ether.Client");

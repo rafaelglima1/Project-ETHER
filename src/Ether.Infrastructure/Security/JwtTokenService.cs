@@ -44,17 +44,27 @@ public sealed class JwtTokenService : ITokenService
     public IssuedToken CreateGameToken(AccountId accountId, Guid characterId) =>
         Create(accountId, GameUse, TimeSpan.FromMinutes(_options.GameTokenLifetimeMinutes), characterId);
 
-    public AccountId? ValidateRefreshToken(string token) => Validate(token, RefreshUse)?.AccountId;
-
-    public GameTokenClaims? ValidateGameToken(string token)
+    public AccountId? ValidateRefreshToken(string token)
     {
-        var validated = Validate(token, GameUse);
-        if (validated is null || validated.Value.CharacterId is null)
+        var status = ValidateDetailed(token, RefreshUse, out var claims);
+        return status == TokenValidationStatus.Valid ? claims?.AccountId : null;
+    }
+
+    public GameTokenValidation ValidateGameToken(string token)
+    {
+        var status = ValidateDetailed(token, GameUse, out var claims);
+
+        if (status != TokenValidationStatus.Valid || claims is null)
         {
-            return null;
+            return GameTokenValidation.Failure(status == TokenValidationStatus.Valid ? TokenValidationStatus.Invalid : status);
         }
 
-        return new GameTokenClaims(validated.Value.AccountId, validated.Value.CharacterId.Value);
+        if (claims.Value.CharacterId is null)
+        {
+            return GameTokenValidation.Failure(TokenValidationStatus.Invalid);
+        }
+
+        return GameTokenValidation.Valid(new GameTokenClaims(claims.Value.AccountId, claims.Value.CharacterId.Value));
     }
 
     private IssuedToken Create(AccountId accountId, string use, TimeSpan lifetime, Guid? characterId)
@@ -87,55 +97,66 @@ public sealed class JwtTokenService : ITokenService
         return new IssuedToken(new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
     }
 
-    private (AccountId AccountId, Guid? CharacterId)? Validate(string token, string expectedUse)
+    private TokenValidationStatus ValidateDetailed(
+        string token,
+        string expectedUse,
+        out (AccountId AccountId, Guid? CharacterId)? claims)
     {
+        claims = null;
+
         if (string.IsNullOrWhiteSpace(token))
         {
-            return null;
+            return TokenValidationStatus.Invalid;
         }
 
+        var parameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = _options.Issuer,
+            ValidateAudience = true,
+            ValidAudience = _options.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = SigningKey(),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30),
+        };
+
+        ClaimsPrincipal principal;
         try
         {
-            var parameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidIssuer = _options.Issuer,
-                ValidateAudience = true,
-                ValidAudience = _options.Audience,
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = SigningKey(),
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromSeconds(30),
-            };
-
-            var principal = new JwtSecurityTokenHandler().ValidateToken(token, parameters, out _);
-
-            if (!string.Equals(principal.FindFirst(UseClaim)?.Value, expectedUse, StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            var subject = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
-                          ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (!Guid.TryParse(subject, out var accountGuid) || accountGuid == Guid.Empty)
-            {
-                return null;
-            }
-
-            Guid? characterId = null;
-            var characterValue = principal.FindFirst(CharacterIdClaim)?.Value;
-            if (Guid.TryParse(characterValue, out var characterGuid) && characterGuid != Guid.Empty)
-            {
-                characterId = characterGuid;
-            }
-
-            return (new AccountId(accountGuid), characterId);
+            principal = new JwtSecurityTokenHandler().ValidateToken(token, parameters, out _);
+        }
+        catch (SecurityTokenExpiredException)
+        {
+            return TokenValidationStatus.Expired;
         }
         catch (Exception exception) when (exception is SecurityTokenException or ArgumentException)
         {
-            return null;
+            return TokenValidationStatus.Invalid;
         }
+
+        if (!string.Equals(principal.FindFirst(UseClaim)?.Value, expectedUse, StringComparison.Ordinal))
+        {
+            return TokenValidationStatus.WrongPurpose;
+        }
+
+        var subject = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                      ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!Guid.TryParse(subject, out var accountGuid) || accountGuid == Guid.Empty)
+        {
+            return TokenValidationStatus.Invalid;
+        }
+
+        Guid? characterId = null;
+        var characterValue = principal.FindFirst(CharacterIdClaim)?.Value;
+        if (Guid.TryParse(characterValue, out var characterGuid) && characterGuid != Guid.Empty)
+        {
+            characterId = characterGuid;
+        }
+
+        claims = (new AccountId(accountGuid), characterId);
+        return TokenValidationStatus.Valid;
     }
 
     private SymmetricSecurityKey SigningKey() =>

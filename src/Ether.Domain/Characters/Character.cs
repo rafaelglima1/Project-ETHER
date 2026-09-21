@@ -148,18 +148,18 @@ public sealed class Character
     {
         if (State is not (CharacterState.InWorld or CharacterState.Combat))
         {
-            throw new DomainException("Character must be in the world to move.");
+            throw new CharacterNotInWorldException("Character must be in the world to move.");
         }
 
         if (!map.Contains(destination) || destination.MapId != MapId)
         {
-            throw new DomainException("Destination is outside the current map.");
+            throw new MovementOutOfBoundsException("Destination is outside the current map.");
         }
 
         var distance = Math.Max(Math.Abs(destination.X - PositionX), Math.Abs(destination.Y - PositionY));
         if (distance > maxDistance)
         {
-            throw new DomainException($"Movement exceeds the allowed distance of {maxDistance} tiles.");
+            throw new MovementTooFarException($"Movement exceeds the allowed distance of {maxDistance} tiles.");
         }
 
         PositionX = destination.X;

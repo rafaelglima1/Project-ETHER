@@ -72,7 +72,7 @@ public sealed class MovementHandlerTests
     {
         var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
-        await Assert.ThrowsAsync<DomainException>(() =>
+        await Assert.ThrowsAnyAsync<DomainException>(() =>
             MoveHandler(persistence).HandleAsync(accountId, characterId, new MoveCharacterRequest(30, 0), CancellationToken.None));
     }
 
@@ -81,7 +81,7 @@ public sealed class MovementHandlerTests
     {
         var (persistence, accountId, characterId) = await SeedInWorldCharacterAsync();
 
-        await Assert.ThrowsAsync<DomainException>(() =>
+        await Assert.ThrowsAnyAsync<DomainException>(() =>
             MoveHandler(persistence).HandleAsync(accountId, characterId, new MoveCharacterRequest(100, 0), CancellationToken.None));
     }
 
