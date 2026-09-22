@@ -1,9 +1,11 @@
 using Ether.Application.Combat;
 using Ether.Application.Exceptions;
+using Ether.Contracts.Combat;
 using Ether.Contracts.Configuration;
 using Ether.Contracts.Realtime;
 using Ether.Domain.Characters;
 using Ether.Domain.Combat;
+using Ether.Domain.Creatures;
 using Ether.GameServer.Protocol;
 using Ether.GameServer.Sessions;
 
@@ -18,12 +20,14 @@ namespace Ether.GameServer.Handlers;
 public sealed class CombatAttackCommandHandler : IProtocolCommandHandler
 {
     private readonly AttackCommandHandler _attack;
+    private readonly AttackCreatureCommandHandler _attackCreature;
     private readonly ProtocolSerializer _serializer;
     private readonly CombatOptions _options;
     private readonly TimeProvider _timeProvider;
 
     public CombatAttackCommandHandler(
         AttackCommandHandler attack,
+        AttackCreatureCommandHandler attackCreature,
         ProtocolSerializer serializer,
         IOptions<CombatOptions> options,
         TimeProvider timeProvider)
@@ -31,6 +35,7 @@ public sealed class CombatAttackCommandHandler : IProtocolCommandHandler
         ArgumentNullException.ThrowIfNull(options);
 
         _attack = attack;
+        _attackCreature = attackCreature;
         _serializer = serializer;
         _options = options.Value;
         _timeProvider = timeProvider;
@@ -93,11 +98,24 @@ public sealed class CombatAttackCommandHandler : IProtocolCommandHandler
             return;
         }
 
+        var isCreatureTarget = string.Equals(payload.TargetType, "creature", StringComparison.OrdinalIgnoreCase);
+
         try
         {
-            var result = await _attack
-                .HandleAsync(session.AccountId.Value, session.CharacterId.Value, abilityId, new CharacterId(payload.TargetId), cancellationToken)
-                .ConfigureAwait(false);
+            CombatResultResponse result;
+
+            if (isCreatureTarget)
+            {
+                result = await _attackCreature
+                    .HandleAsync(session.AccountId.Value, session.CharacterId.Value, abilityId, new CreatureInstanceId(payload.TargetId), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                result = await _attack
+                    .HandleAsync(session.AccountId.Value, session.CharacterId.Value, abilityId, new CharacterId(payload.TargetId), cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             await responder.SendEventAsync(ProtocolMessageNames.CombatResult, result, envelope.RequestId, cancellationToken)
                 .ConfigureAwait(false);

@@ -51,7 +51,23 @@ public sealed class GameWebSocketIntegrationTests
         await socket.SendAsync(Encoding.UTF8.GetBytes(json), WebSocketMessageType.Text, true, cancellationToken);
     }
 
+    /// <summary>
+    /// Reads the next frame whose requestId is set (a response to a command),
+    /// skipping unsolicited server events such as creature broadcasts.
+    /// </summary>
     private static async Task<ProtocolEnvelope> ReceiveAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var envelope = await ReceiveRawAsync(socket, cancellationToken);
+            if (envelope.RequestId is not null)
+            {
+                return envelope;
+            }
+        }
+    }
+
+    private static async Task<ProtocolEnvelope> ReceiveRawAsync(WebSocket socket, CancellationToken cancellationToken)
     {
         var buffer = new byte[4096];
         using var message = new MemoryStream();

@@ -1,6 +1,7 @@
 using Ether.Application.Abstractions;
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
+using Ether.Domain.World;
 using Ether.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -28,6 +29,14 @@ internal sealed class EfCharacterRepository : ICharacterRepository
         await _context.Characters
             .Where(character => character.AccountId == accountId)
             .OrderBy(character => character.CreatedAt)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+    public async Task<IReadOnlyList<Character>> GetByMapAsync(
+        MapId mapId,
+        CancellationToken cancellationToken) =>
+        await _context.Characters
+            .Where(character => character.MapId == mapId)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 }

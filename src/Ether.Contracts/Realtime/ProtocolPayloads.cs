@@ -19,13 +19,35 @@ public sealed record AuthenticatedEventPayload(Guid SessionId, Guid AccountId, G
 /// <summary>Player state inside a world snapshot.</summary>
 public sealed record PlayerSnapshotPayload(Guid CharacterId, int X, int Y, string State);
 
+/// <summary>Creature state inside a world snapshot.</summary>
+public sealed record CreatureSnapshotPayload(
+    Guid CreatureId,
+    string DefinitionId,
+    string Name,
+    int X,
+    int Y,
+    int Health,
+    int MaxHealth,
+    string State);
+
 /// <summary>Payload of <see cref="ProtocolMessageNames.WorldSnapshot"/>.</summary>
 public sealed record WorldSnapshotPayload(
     int MapId,
     int Width,
     int Height,
     PlayerSnapshotPayload Player,
-    DateTimeOffset ServerTime);
+    DateTimeOffset ServerTime,
+    IReadOnlyList<CreatureSnapshotPayload>? Creatures = null);
+
+/// <summary>Payload of <see cref="ProtocolMessageNames.WorldCreatureMoved"/>.</summary>
+public sealed record WorldCreatureMovedEventPayload(
+    Guid CreatureId,
+    int MapId,
+    int X,
+    int Y,
+    int Health,
+    int MaxHealth,
+    string State);
 
 /// <summary>Payload of <see cref="ProtocolMessageNames.MovementAccepted"/>.</summary>
 public sealed record MovementAcceptedEventPayload(Guid CharacterId, int MapId, int X, int Y);

@@ -50,6 +50,7 @@ public static class ProtocolMessageNames
     // server -> client
     public const string GameAuthenticated = "game.authenticated";
     public const string WorldSnapshot = "world.snapshot";
+    public const string WorldCreatureMoved = "world.creature_moved";
     public const string MovementAccepted = "movement.accepted";
     public const string CombatResult = "combat.result";
     public const string SystemPong = "system.pong";

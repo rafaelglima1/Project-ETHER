@@ -1,0 +1,162 @@
+using Ether.Application.Abstractions;
+using Ether.Application.Combat;
+using Ether.Application.Creatures;
+using Ether.Application.Exceptions;
+using Ether.Application.Tests.Fakes;
+using Ether.Contracts.Configuration;
+using Ether.Domain.Accounts;
+using Ether.Domain.Combat;
+using Ether.Domain.Creatures;
+using Ether.Domain.World;
+
+using Microsoft.Extensions.Options;
+
+namespace Ether.Application.Tests.Creatures;
+
+public sealed class AttackCreatureCommandHandlerTests
+{
+    private static readonly AbilityId BasicAttack = AbilityCatalog.BasicAttack;
+    private static readonly AbilityId PowerStrike = AbilityCatalog.PowerStrike;
+
+    private static readonly CombatOptions Options = new() { MinimumDamage = 1, ResistanceCap = 0.9, MaxAttacksPerSecond = 4 };
+
+    private static AttackCreatureCommandHandler CreateHandler(
+        InMemoryPersistence persistence,
+        FakeCreatureWorld world,
+        FakeCombatStatsProvider stats,
+        IAbilityCooldownStore cooldowns,
+        IRandomSource random) =>
+        new(persistence, world, persistence, stats, cooldowns, new NoopEntityLockProvider(), random,
+            Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System);
+
+    private static FakeCombatStatsProvider Neutral() => new();
+
+    [Fact]
+    public async Task Valid_attack_damages_the_creature()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 1, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource { Value = 1 });
+
+        var result = await handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None);
+
+        Assert.Equal(4, result.Damage);
+        Assert.Equal("creature", result.TargetType);
+        Assert.Equal(creature.MaxHealth - 4, creature.Health);
+    }
+
+    [Fact]
+    public async Task Unknown_ability_is_rejected()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 1, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource());
+
+        var rejection = await Assert.ThrowsAsync<CombatRejectedException>(() =>
+            handler.HandleAsync(account, attacker.Id, new AbilityId("warrior.nope"), creature.Id, CancellationToken.None));
+
+        Assert.Equal(CombatRejectionReason.AbilityNotFound, rejection.Reason);
+    }
+
+    [Fact]
+    public async Task Missing_creature_is_rejected()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource());
+
+        var rejection = await Assert.ThrowsAsync<CombatRejectedException>(() =>
+            handler.HandleAsync(account, attacker.Id, BasicAttack, CreatureInstanceId.New(), CancellationToken.None));
+
+        Assert.Equal(CombatRejectionReason.TargetNotFound, rejection.Reason);
+    }
+
+    [Fact]
+    public async Task Out_of_range_is_rejected()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 9, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource());
+
+        var rejection = await Assert.ThrowsAsync<CombatRejectedException>(() =>
+            handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None));
+
+        Assert.Equal(CombatRejectionReason.OutOfRange, rejection.Reason);
+    }
+
+    [Fact]
+    public async Task Dead_creature_is_rejected()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 1, 0);
+        creature.ApplyDamage(999, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(30));
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource());
+
+        var rejection = await Assert.ThrowsAsync<CombatRejectedException>(() =>
+            handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None));
+
+        Assert.Equal(CombatRejectionReason.TargetDead, rejection.Reason);
+    }
+
+    [Fact]
+    public async Task Cooldown_is_enforced_for_creature_targets()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.wolf"), 1, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource { Value = 1 });
+
+        await handler.HandleAsync(account, attacker.Id, PowerStrike, creature.Id, CancellationToken.None);
+
+        var rejection = await Assert.ThrowsAsync<CombatRejectedException>(() =>
+            handler.HandleAsync(account, attacker.Id, PowerStrike, creature.Id, CancellationToken.None));
+
+        Assert.Equal(CombatRejectionReason.CooldownActive, rejection.Reason);
+    }
+
+    [Fact]
+    public async Task Attack_on_a_creature_from_another_account_is_forbidden()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (_, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 1, 0);
+        var handler = CreateHandler(persistence, world, Neutral(), new FakeCooldownStore(), new FixedRandomSource());
+
+        await Assert.ThrowsAsync<ForbiddenException>(() =>
+            handler.HandleAsync(AccountId.New(), attacker.Id, BasicAttack, creature.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Lethal_attack_defeats_the_creature()
+    {
+        var persistence = new InMemoryPersistence();
+        var world = new FakeCreatureWorld();
+        var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
+
+        // High power so a single hit is lethal for the slime (30 HP).
+        var creature = world.Seed(new CreatureDefinitionId("creature.slime"), 1, 0);
+        var stats = new FakeCombatStatsProvider
+        {
+            Stats = new CombatStats(Power: 100, Armor: 0, CriticalChance: 0, CriticalMultiplier: 1, new Dictionary<DamageType, double>()),
+        };
+        var handler = CreateHandler(persistence, world, stats, new FakeCooldownStore(), new FixedRandomSource { Value = 1 });
+
+        var result = await handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None);
+
+        Assert.True(result.TargetDefeated);
+        Assert.Equal("Dead", result.TargetState);
+        Assert.False(creature.IsAlive);
+        Assert.NotNull(creature.RespawnAt);
+    }
+}

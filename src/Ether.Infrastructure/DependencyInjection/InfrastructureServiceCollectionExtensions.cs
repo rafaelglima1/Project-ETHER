@@ -98,6 +98,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IEntityLockProvider, InMemoryEntityLockProvider>();
         services.AddSingleton<Ether.Domain.Combat.IRandomSource, SharedRandomSource>();
 
+        // Creature world state (M6): transient instances, not per-instance persistence.
+        services.AddSingleton<ICreatureWorld, InMemoryCreatureWorld>();
+
         // Repositories and unit of work depend on the always-registered EF Core context.
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<ICharacterRepository, EfCharacterRepository>();

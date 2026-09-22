@@ -1,4 +1,5 @@
 using Ether.Application.Characters;
+using Ether.Application.Creatures;
 using Ether.Contracts.Configuration;
 using Ether.Contracts.Realtime;
 using Ether.Domain.Accounts;
@@ -23,7 +24,14 @@ public sealed class EnterWorldCommandHandlerTests
         CharacterId characterId)
     {
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
-        var handler = new EnterWorldCommandHandler(enterWorld, new FakeWorldMapProvider(), new ProtocolSerializer(), TimeProvider.System);
+        var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
+        var handler = new EnterWorldCommandHandler(
+            enterWorld,
+            new FakeWorldMapProvider(),
+            creatures,
+            new CreatureSpawnService(creatures),
+            new ProtocolSerializer(),
+            TimeProvider.System);
 
         var session = new GameSession(16, DateTimeOffset.UtcNow);
         session.MarkAuthenticated(accountId, characterId, DateTimeOffset.UtcNow);
@@ -36,7 +44,14 @@ public sealed class EnterWorldCommandHandlerTests
     {
         var persistence = new InMemoryPersistence();
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
-        var handler = new EnterWorldCommandHandler(enterWorld, new FakeWorldMapProvider(), new ProtocolSerializer(), TimeProvider.System);
+        var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
+        var handler = new EnterWorldCommandHandler(
+            enterWorld,
+            new FakeWorldMapProvider(),
+            creatures,
+            new CreatureSpawnService(creatures),
+            new ProtocolSerializer(),
+            TimeProvider.System);
         var session = new GameSession(16, DateTimeOffset.UtcNow);
         var responder = new CapturingResponder();
 

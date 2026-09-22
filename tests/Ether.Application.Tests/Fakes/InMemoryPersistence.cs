@@ -47,6 +47,11 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
                 .OrderBy(character => character.CreatedAt)
                 .ToList());
 
+    public Task<IReadOnlyList<Character>> GetByMapAsync(
+        Ether.Domain.World.MapId mapId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Character>>(_characters.Where(character => character.MapId == mapId).ToList());
+
     public Task SaveChangesAsync(CancellationToken cancellationToken)
     {
         foreach (var account in _accounts)

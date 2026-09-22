@@ -50,7 +50,23 @@ public sealed class CombatWebSocketIntegrationTests
         await socket.SendAsync(Encoding.UTF8.GetBytes(Serializer.Serialize(envelope)), WebSocketMessageType.Text, true, cancellationToken);
     }
 
+    /// <summary>
+    /// Reads the next frame whose requestId is set (a response to a command),
+    /// skipping unsolicited server events such as creature broadcasts.
+    /// </summary>
     private static async Task<ProtocolEnvelope> ReceiveAsync(WebSocket socket, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var envelope = await ReceiveRawAsync(socket, cancellationToken);
+            if (envelope.RequestId is not null)
+            {
+                return envelope;
+            }
+        }
+    }
+
+    private static async Task<ProtocolEnvelope> ReceiveRawAsync(WebSocket socket, CancellationToken cancellationToken)
     {
         var buffer = new byte[8192];
         using var message = new MemoryStream();
@@ -74,6 +90,12 @@ public sealed class CombatWebSocketIntegrationTests
     private static async Task<WebSocket> ConnectAndEnterWorldAsync(
         WebApplicationFactory<Program> factory,
         string gameToken,
+        CancellationToken cancellationToken) =>
+        (await ConnectEnterWithSnapshotAsync(factory, gameToken, cancellationToken)).Socket;
+
+    private static async Task<(WebSocket Socket, WorldSnapshotPayload Snapshot)> ConnectEnterWithSnapshotAsync(
+        WebApplicationFactory<Program> factory,
+        string gameToken,
         CancellationToken cancellationToken)
     {
         var socket = await factory.Server.CreateWebSocketClient()
@@ -87,7 +109,7 @@ public sealed class CombatWebSocketIntegrationTests
         var snapshot = await ReceiveAsync(socket, cancellationToken);
         Assert.Equal(ProtocolMessageNames.WorldSnapshot, snapshot.Name);
 
-        return socket;
+        return (socket, Serializer.DeserializePayload<WorldSnapshotPayload>(snapshot.Payload)!);
     }
 
     [Fact]
@@ -202,5 +224,101 @@ public sealed class CombatWebSocketIntegrationTests
 
         var payload = Serializer.DeserializePayload<Contracts.Combat.CombatResultResponse>(result.Payload)!;
         Assert.Equal(characterA.Value, payload.AttackerId);
+    }
+
+    [Fact]
+    public async Task World_snapshot_includes_the_map_creatures()
+    {
+        using var factory = CreateFactory();
+        using var timeout = new CancellationTokenSource(Timeout);
+
+        var persistence = factory.Services.GetRequiredService<InMemoryPersistence>();
+        var (account, character) = await persistence.SeedCharacterAsync("Hero");
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+
+        var socket = await factory.Server.CreateWebSocketClient().ConnectAsync(new Uri("ws://localhost/game"), timeout.Token);
+        using var socketScope = socket;
+
+        await SendAsync(socket, ProtocolMessageNames.GameAuthenticate, new AuthenticateCommandPayload(tokenService.CreateGameToken(account, character.Value).Token), 1, timeout.Token);
+        _ = await ReceiveAsync(socket, timeout.Token);
+
+        await SendAsync(socket, ProtocolMessageNames.WorldEnter, new WorldEnterCommandPayload(), 2, timeout.Token);
+        var snapshot = await ReceiveAsync(socket, timeout.Token);
+
+        var payload = Serializer.DeserializePayload<WorldSnapshotPayload>(snapshot.Payload)!;
+        Assert.NotNull(payload.Creatures);
+        Assert.NotEmpty(payload.Creatures!);
+    }
+
+    [Fact]
+    public async Task Attacking_a_creature_is_routed_to_the_creature_pipeline()
+    {
+        using var factory = CreateFactory();
+        using var timeout = new CancellationTokenSource(Timeout);
+
+        var persistence = factory.Services.GetRequiredService<InMemoryPersistence>();
+        var (account, character) = await persistence.SeedCharacterAsync("Hero");
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+
+        var (socket, snapshot) = await ConnectEnterWithSnapshotAsync(
+            factory, tokenService.CreateGameToken(account, character.Value).Token, timeout.Token);
+        using var socketScope = socket;
+
+        // Pick the creature farthest from the spawn point so the AI cannot bring it
+        // into range before we attack.
+        var farthest = snapshot.Creatures!
+            .OrderByDescending(creature => Math.Max(creature.X, creature.Y))
+            .First();
+
+        await SendAsync(
+            socket,
+            ProtocolMessageNames.CombatAttack,
+            new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, farthest.CreatureId, "creature"),
+            3,
+            timeout.Token);
+
+        var rejected = await ReceiveAsync(socket, timeout.Token);
+
+        Assert.Equal(ProtocolMessageTypes.Error, rejected.Type);
+        // OUT_OF_RANGE proves the id was resolved as a creature (a character id
+        // would have produced TARGET_NOT_FOUND).
+        Assert.Equal(
+            ProtocolErrorCodes.OutOfRange,
+            Serializer.DeserializePayload<ProtocolErrorPayload>(rejected.Payload)!.Code);
+    }
+
+    [Fact]
+    public async Task Creature_ai_eventually_attacks_a_nearby_player()
+    {
+        using var factory = CreateFactory();
+        using var timeout = new CancellationTokenSource(Timeout);
+
+        var persistence = factory.Services.GetRequiredService<InMemoryPersistence>();
+        var (account, character) = await persistence.SeedCharacterAsync("Hero");
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+        using var socket = await ConnectAndEnterWorldAsync(factory, tokenService.CreateGameToken(account, character.Value).Token, timeout.Token);
+
+        // The nearest slime is within aggro range of the spawn point and will chase
+        // and attack; wait for the unsolicited creature combat result.
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            var envelope = await ReceiveRawAsync(socket, timeout.Token);
+            if (envelope.Name != ProtocolMessageNames.CombatResult || envelope.Type != ProtocolMessageTypes.Event)
+            {
+                continue;
+            }
+
+            var payload = Serializer.DeserializePayload<Contracts.Combat.CombatResultResponse>(envelope.Payload)!;
+            if (payload.AttackerType == "creature")
+            {
+                Assert.Equal(character.Value, payload.TargetId);
+                Assert.True(payload.Damage >= 1);
+                Assert.True(payload.TargetHealth < payload.TargetMaxHealth);
+                return;
+            }
+        }
+
+        Assert.Fail("Creature AI did not attack the nearby player within the timeout.");
     }
 }

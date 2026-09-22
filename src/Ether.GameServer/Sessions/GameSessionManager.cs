@@ -34,4 +34,8 @@ public sealed class GameSessionManager
     public void Remove(Guid sessionId) => _sessions.TryRemove(sessionId, out _);
 
     public IReadOnlyList<GameSession> Snapshot() => _sessions.Values.ToList();
+
+    /// <summary>Finds the live session controlling a character, if any.</summary>
+    public GameSession? FindByCharacter(Ether.Domain.Characters.CharacterId characterId) =>
+        _sessions.Values.FirstOrDefault(session => session.CharacterId == characterId);
 }

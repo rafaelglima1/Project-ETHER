@@ -32,6 +32,7 @@ public static class GameServerServiceCollectionExtensions
 
         // Lifecycle.
         services.AddHostedService<GameSessionHeartbeatService>();
+        services.AddHostedService<CreatureAiTickService>();
         services.AddHostedService<WorldLoopService>();
 
         return services;

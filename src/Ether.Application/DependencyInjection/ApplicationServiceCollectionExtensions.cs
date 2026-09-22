@@ -2,6 +2,7 @@ using Ether.Application.Accounts;
 using Ether.Application.Auth;
 using Ether.Application.Characters;
 using Ether.Application.Combat;
+using Ether.Application.Creatures;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -35,6 +36,11 @@ public static class ApplicationServiceCollectionExtensions
         // Combat (M5).
         services.TryAddSingleton<ICombatStatsProvider, LevelBasedCombatStatsProvider>();
         services.AddScoped<AttackCommandHandler>();
+
+        // Creatures + AI (M6).
+        services.AddSingleton<CreatureSpawnService>();
+        services.AddScoped<AttackCreatureCommandHandler>();
+        services.AddScoped<CreatureAiTickHandler>();
 
         return services;
     }
