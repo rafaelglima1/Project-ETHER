@@ -14,6 +14,7 @@ const SUITES := [
 	preload("res://tests/test_reconnect_manager.gd"),
 	preload("res://tests/test_mock_transport.gd"),
 	preload("res://tests/test_world_state.gd"),
+	preload("res://tests/test_client_robustness.gd"),
 	preload("res://tests/test_mock_playable.gd"),
 ]
 
