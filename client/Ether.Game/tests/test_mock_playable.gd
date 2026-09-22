@@ -181,6 +181,35 @@ func test_disconnect_and_reconnect_restores_world() -> void:
 	assert_eq(world.creature_count(), 3, "creatures restored after reconnect")
 
 
+func test_reconnect_during_combat_restores_world_and_combat() -> void:
+	_setup(true)
+	_run_to_world()
+
+	# Let the AI reach and hit the player.
+	_pump(4.0)
+	assert_true(_player_attacked_combat_results().size() > 0, "combat happened before reconnect")
+
+	network.disconnect_from_server()
+	_pump(0.2)
+	assert_eq(network.state.current(), AppState.State.DISCONNECTED)
+
+	network.connect_to_server()
+	_pump(0.2)
+	_run_to_world()
+	assert_eq(network.state.current(), AppState.State.IN_WORLD)
+	assert_eq(world.creature_count(), 3, "world restored after combat reconnect")
+
+	# Combat still works after the reconnect.
+	var before := combat_results.size()
+	var creature_id := _move_adjacent_to_first_creature()
+	for i in range(6):
+		network.attack(ProtocolMessages.ABILITY_BASIC_ATTACK, creature_id, ProtocolMessages.TARGET_TYPE_CREATURE)
+		_pump(0.2)
+		if combat_results.size() > before:
+			break
+	assert_true(combat_results.size() > before, "combat works after reconnect")
+
+
 func test_state_machine_refuses_illegal_jump() -> void:
 	var state := AppState.new()
 	assert_false(state.transition(AppState.State.IN_WORLD))
