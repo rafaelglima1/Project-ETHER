@@ -33,6 +33,10 @@ stacking, equipment). See
 
 ### Realtime (GameServer WebSocket)
 
+Public endpoint (Oracle): `wss://game.rotagov.com.br/game` (HTTPS API:
+`https://game.rotagov.com.br`). See
+[`docs/operations/oracle-https-endpoint.md`](docs/operations/oracle-https-endpoint.md).
+
 `GET /game` (WebSocket, `WebSocket:Path`) is the canonical realtime endpoint; the
 envelope, message names, error codes, session lifecycle, heartbeat, sequence and
 authority rules are defined in **ADR-0003**, combat in **ADR-0004** and creatures
