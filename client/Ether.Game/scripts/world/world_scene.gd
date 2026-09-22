@@ -1,14 +1,14 @@
 extends Node2D
 
-## World presentation scene (Blueprint v5.0 §49/§52).
+## World presentation scene.
 ##
-## Renders a small placeholder map, spawns/updates/despawns entity views from
-## WorldState, and converts pointer input into movement/attack intents. It holds
-## no authoritative gameplay logic.
+## Renders a small bounded map, spawns/updates/despawns entity views from
+## WorldState, and converts pointer input into movement / target / attack
+## intents. It holds no authoritative gameplay logic: positions, creature AI,
+## health, death and damage all come from the server.
 
 var game: Node = null
 var world_state: WorldState
-var combat := CombatController.new()
 var input_controller: InputController
 var camera: CameraController
 var tile_size := 32
@@ -44,7 +44,9 @@ func _ready() -> void:
 	world_state.entity_removed.connect(_on_entity_removed)
 	world_state.player_updated.connect(_on_player_updated)
 	world_state.snapshot_applied.connect(_on_snapshot_applied)
-	combat.target_changed.connect(_on_target_changed)
+
+	if game != null and game.has_signal("target_changed"):
+		game.target_changed.connect(_on_target_changed)
 
 	_sync_all()
 	_refresh_camera()
@@ -84,8 +86,7 @@ func _on_entity_removed(id: String) -> void:
 		_views.erase(id)
 		if view != null and is_instance_valid(view):
 			view.queue_free()
-	if combat.selected_target_id == id:
-		combat.clear_target()
+	queue_redraw()
 
 
 func _on_player_updated() -> void:
@@ -123,7 +124,7 @@ func _player_view_node() -> Node2D:
 # --- Input --------------------------------------------------------------------
 
 func _on_pointer_pressed(screen_position: Vector2) -> void:
-	if world_state.map.is_empty():
+	if world_state.map.is_empty() or game == null:
 		return
 
 	var world_position := get_canvas_transform().affine_inverse() * screen_position
@@ -131,24 +132,25 @@ func _on_pointer_pressed(screen_position: Vector2) -> void:
 	var creature_id := world_state.creature_at(tile.x, tile.y)
 
 	if creature_id != "":
-		combat.select_target(creature_id)
+		game.select_target(creature_id)
 		if _is_adjacent(tile, world_state.player_position()):
-			_request_attack(creature_id)
+			game.request_attack(creature_id)
 		else:
-			_request_move(tile.x, tile.y)
+			game.request_move(tile.x, tile.y)
 	else:
-		combat.clear_target()
-		_request_move(tile.x, tile.y)
+		game.clear_target()
+		game.request_move(tile.x, tile.y)
 	queue_redraw()
 
 
 func _on_move_step(direction: Vector2i) -> void:
 	var next := world_state.player_position() + direction
-	_request_move(next.x, next.y)
+	game.request_move(next.x, next.y)
 
 
 func _on_cancel_pressed() -> void:
-	combat.clear_target()
+	if game != null:
+		game.clear_target()
 	queue_redraw()
 
 
@@ -156,16 +158,8 @@ func _on_target_changed(_target_id: String) -> void:
 	queue_redraw()
 
 
-func _request_move(x: int, y: int) -> void:
-	game.request_move(x, y)
-
-
-func _request_attack(target_id: String) -> void:
-	game.request_attack(target_id)
-
-
 func _is_adjacent(a: Vector2i, b: Vector2i) -> bool:
-	return absi(a.x - b.x) + absi(a.y - b.y) <= 1
+	return maxi(absi(a.x - b.x), absi(a.y - b.y)) <= 1
 
 
 # --- Rendering ----------------------------------------------------------------
@@ -186,8 +180,11 @@ func _draw() -> void:
 		draw_line(Vector2(0.0, y * tile_size), Vector2(extent.x, y * tile_size), Color(0.16, 0.19, 0.24), 1.0)
 	draw_rect(Rect2(Vector2.ZERO, extent), Color(0.30, 0.50, 0.70), false, 2.0)
 
-	if combat.has_target() and world_state.has_entity(combat.selected_target_id):
-		var tile := world_state.entity_position(combat.selected_target_id)
+	var target_id := ""
+	if game != null:
+		target_id = String(game.selected_target_id)
+	if target_id != "" and world_state.has_entity(target_id):
+		var tile := world_state.entity_position(target_id)
 		draw_rect(
 			Rect2(Vector2(tile.x * tile_size, tile.y * tile_size), Vector2(tile_size, tile_size)),
 			Color(1.0, 0.85, 0.2, 0.6), false, 2.0)

@@ -12,6 +12,8 @@ var _messages: Array = []
 
 func _setup() -> void:
 	_backend = MockBackend.new()
+	_backend.set_ai_enabled(false)
+	_backend.set_critical_enabled(false)
 	_transport = MockTransport.new(_backend, 0.0)
 	_serializer = ProtocolSerializer.new()
 	_messages = []

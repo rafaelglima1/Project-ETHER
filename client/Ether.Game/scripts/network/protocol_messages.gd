@@ -20,19 +20,29 @@ const KNOWN_TYPES := [TYPE_COMMAND, TYPE_EVENT, TYPE_ERROR]
 const CMD_GAME_AUTHENTICATE := "game.authenticate"
 const CMD_WORLD_ENTER := "world.enter"
 const CMD_MOVEMENT_MOVE := "movement.move"
+const CMD_COMBAT_ATTACK := "combat.attack"
 const CMD_SYSTEM_PING := "system.ping"
 
 # --- Server -> Client events ---
 const EVT_GAME_AUTHENTICATED := "game.authenticated"
 const EVT_WORLD_SNAPSHOT := "world.snapshot"
 const EVT_MOVEMENT_ACCEPTED := "movement.accepted"
+const EVT_COMBAT_RESULT := "combat.result"
 const EVT_SYSTEM_PONG := "system.pong"
+
+# --- Server -> Client creature lifecycle events (M6, additive) ---
+const EVT_CREATURE_SPAWNED := "creature.spawned"
+const EVT_CREATURE_MOVED := "creature.moved"
+const EVT_CREATURE_STATE := "creature.state"
+const EVT_CREATURE_HEALTH := "creature.health"
+const EVT_CREATURE_DESPAWNED := "creature.despawned"
 
 # --- Server -> Client error message names ---
 const ERR_PROTOCOL := "protocol.error"
 const ERR_MOVEMENT_REJECTED := "movement.rejected"
 const ERR_WORLD_ENTER_REJECTED := "world.enter.rejected"
 const ERR_GAME_AUTHENTICATE_REJECTED := "game.authenticate.rejected"
+const ERR_COMBAT_REJECTED := "combat.rejected"
 
 # --- Deterministic error codes (ProtocolErrorCodes on the server) ---
 const CODE_INVALID_ENVELOPE := "INVALID_ENVELOPE"
@@ -56,3 +66,30 @@ const CODE_INVALID_SEQUENCE := "INVALID_SEQUENCE"
 const CODE_RATE_LIMITED := "RATE_LIMITED"
 const CODE_SERVER_BUSY := "SERVER_BUSY"
 const CODE_INTERNAL_ERROR := "INTERNAL_ERROR"
+
+# --- Combat error codes (ADR-0004) ---
+const CODE_ABILITY_NOT_FOUND := "ABILITY_NOT_FOUND"
+const CODE_TARGET_NOT_FOUND := "TARGET_NOT_FOUND"
+const CODE_TARGET_DEAD := "TARGET_DEAD"
+const CODE_ATTACKER_DEAD := "ATTACKER_DEAD"
+const CODE_OUT_OF_RANGE := "OUT_OF_RANGE"
+const CODE_COOLDOWN_ACTIVE := "COOLDOWN_ACTIVE"
+const CODE_SELF_TARGET := "SELF_TARGET"
+
+# --- Content keys (mirror the M5 catalog until the content pipeline lands) ---
+const ABILITY_BASIC_ATTACK := "warrior.basic_attack"
+const ABILITY_POWER_STRIKE := "warrior.power_strike"
+
+const TARGET_TYPE_CHARACTER := "character"
+const TARGET_TYPE_CREATURE := "creature"
+
+# --- Creature state names (mirror Ether.Domain.Creatures.CreatureState) ---
+const CREATURE_STATE_IDLE := "Idle"
+const CREATURE_STATE_PATROL := "Patrol"
+const CREATURE_STATE_INVESTIGATE := "Investigate"
+const CREATURE_STATE_CHASE := "Chase"
+const CREATURE_STATE_ATTACK := "Attack"
+const CREATURE_STATE_FLEE := "Flee"
+const CREATURE_STATE_RETURN := "Return"
+const CREATURE_STATE_DEAD := "Dead"
+const CREATURE_STATE_RESPAWNING := "Respawning"

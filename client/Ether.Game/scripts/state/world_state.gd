@@ -91,6 +91,84 @@ func apply_movement(payload: Dictionary) -> Dictionary:
 	return {"applied": true, "reason": ""}
 
 
+# --- Creature replication (M6) -------------------------------------------------
+
+func apply_creature_spawned(payload: Dictionary) -> bool:
+	var creature := SnapshotProcessor.normalize_creature(payload)
+	if creature.is_empty():
+		return false
+	_upsert_entity(creature)
+	return true
+
+
+func apply_creature_moved(payload: Dictionary) -> bool:
+	var id := String(payload.get("creatureId", payload.get("id", "")))
+	if id == "" or not has_entity(id):
+		return false
+	_upsert_entity({"id": id, "x": int(payload.get("x", 0)), "y": int(payload.get("y", 0))})
+	return true
+
+
+func apply_creature_state(payload: Dictionary) -> bool:
+	var id := String(payload.get("creatureId", payload.get("id", "")))
+	if id == "" or not has_entity(id):
+		return false
+	var state := String(payload.get("state", ""))
+	_upsert_entity({"id": id, "state": state, "dead": is_dead_state(state)})
+	return true
+
+
+func apply_creature_health(payload: Dictionary) -> bool:
+	var id := String(payload.get("creatureId", payload.get("id", "")))
+	if id == "" or not has_entity(id):
+		return false
+	_upsert_entity({
+		"id": id,
+		"hp": int(payload.get("health", payload.get("hp", 0))),
+		"maxHp": int(payload.get("maxHealth", payload.get("maxHp", 0))),
+	})
+	return true
+
+
+func apply_creature_despawned(payload: Dictionary) -> bool:
+	var id := String(payload.get("creatureId", payload.get("id", "")))
+	if id == "":
+		return false
+	remove_entity(id)
+	return true
+
+
+## Applies a `combat.result`: updates the target's HP/state/death.
+## Returns { target_id, defeated, target_health, target_max_health, target_state }.
+func apply_combat_result(payload: Dictionary) -> Dictionary:
+	var target_id := String(payload.get("targetId", ""))
+	var health := int(payload.get("targetHealth", 0))
+	var max_health := int(payload.get("targetMaxHealth", 0))
+	var state := String(payload.get("targetState", ""))
+	var defeated := bool(payload.get("targetDefeated", false))
+
+	if target_id != "" and has_entity(target_id):
+		_upsert_entity({
+			"id": target_id,
+			"hp": health,
+			"maxHp": max_health,
+			"state": state,
+			"dead": defeated or is_dead_state(state),
+		})
+
+	return {
+		"target_id": target_id,
+		"defeated": defeated,
+		"target_health": health,
+		"target_max_health": max_health,
+		"target_state": state,
+	}
+
+
+static func is_dead_state(state: String) -> bool:
+	return state == ProtocolMessages.CREATURE_STATE_DEAD or state == ProtocolMessages.CREATURE_STATE_RESPAWNING
+
+
 func has_entity(id: String) -> bool:
 	return entities.has(id)
 
@@ -125,17 +203,29 @@ func creature_at(x: int, y: int) -> String:
 	return ""
 
 
-## Returns the id of the nearest creature within `max_distance`, or "".
+## Returns the id of the nearest creature within `max_distance` (Chebyshev, matching
+## server range semantics), or "".
 func nearest_creature(origin: Vector2i, max_distance: int = 8) -> String:
 	var best := ""
 	var best_distance := max_distance + 1
 	for creature in creatures():
 		var position := Vector2i(int(creature.get("x", 0)), int(creature.get("y", 0)))
-		var distance := absi(origin.x - position.x) + absi(origin.y - position.y)
+		var distance := maxi(absi(origin.x - position.x), absi(origin.y - position.y))
 		if distance < best_distance:
 			best_distance = distance
 			best = String(creature.get("id", ""))
 	return best
+
+
+func creature_count() -> int:
+	return creatures().size()
+
+
+## Chebyshev distance from the player to an entity (server range semantics).
+func player_distance_to_chebyshev(id: String) -> int:
+	var position := entity_position(id)
+	var origin := player_position()
+	return maxi(absi(origin.x - position.x), absi(origin.y - position.y))
 
 
 func _set_player(data: Dictionary) -> void:

@@ -9,6 +9,7 @@ extends Node2D
 var entity_id := ""
 var entity_kind := "creature"
 var display_name := ""
+var state := ""
 var tile_size := 32
 var hp := 0
 var max_hp := 0
@@ -38,6 +39,8 @@ func update_from(data: Dictionary) -> void:
 		entity_kind = String(data["kind"])
 	if data.has("name"):
 		display_name = String(data["name"])
+	if data.has("state"):
+		state = String(data["state"])
 	_apply_body_color()
 	set_logical_position(int(data.get("x", target_tile.x)), int(data.get("y", target_tile.y)), false)
 	apply_stats(data)
@@ -99,4 +102,12 @@ func _apply_body_color() -> void:
 	if entity_kind == "player":
 		_body_color = Color(0.35, 0.75, 1.0)
 	else:
-		_body_color = Color(0.85, 0.4, 0.4)
+		# Creatures shift colour with their server-driven AI state.
+		if state == ProtocolMessages.CREATURE_STATE_CHASE or state == ProtocolMessages.CREATURE_STATE_ATTACK:
+			_body_color = Color(1.0, 0.55, 0.25)
+		elif state == ProtocolMessages.CREATURE_STATE_DEAD or state == ProtocolMessages.CREATURE_STATE_RESPAWNING:
+			_body_color = Color(0.35, 0.35, 0.38)
+		elif state == ProtocolMessages.CREATURE_STATE_RETURN:
+			_body_color = Color(0.7, 0.6, 0.4)
+		else:
+			_body_color = Color(0.85, 0.4, 0.4)

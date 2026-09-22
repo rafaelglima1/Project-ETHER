@@ -50,4 +50,18 @@ static func user_message(code: String) -> String:
 		return "The server is busy. Try again."
 	elif code == ProtocolMessages.CODE_INTERNAL_ERROR:
 		return "The server hit an unexpected error."
+	elif code == ProtocolMessages.CODE_ABILITY_NOT_FOUND:
+		return "That ability is not available."
+	elif code == ProtocolMessages.CODE_TARGET_NOT_FOUND:
+		return "That target no longer exists."
+	elif code == ProtocolMessages.CODE_TARGET_DEAD:
+		return "That target is already dead."
+	elif code == ProtocolMessages.CODE_ATTACKER_DEAD:
+		return "You cannot attack while dead."
+	elif code == ProtocolMessages.CODE_OUT_OF_RANGE:
+		return "That target is out of range."
+	elif code == ProtocolMessages.CODE_COOLDOWN_ACTIVE:
+		return "That ability is still on cooldown."
+	elif code == ProtocolMessages.CODE_SELF_TARGET:
+		return "You cannot target yourself."
 	return FALLBACK

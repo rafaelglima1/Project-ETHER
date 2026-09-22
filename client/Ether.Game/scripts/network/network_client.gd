@@ -135,6 +135,14 @@ func move_to(x: int, y: int) -> String:
 	return sender.send(ProtocolMessages.CMD_MOVEMENT_MOVE, {"x": x, "y": y})
 
 
+func attack(ability_id: String, target_id: String, target_type: String) -> String:
+	return sender.send(ProtocolMessages.CMD_COMBAT_ATTACK, {
+		"abilityId": ability_id,
+		"targetId": target_id,
+		"targetType": target_type,
+	})
+
+
 func ping() -> String:
 	return sender.send(ProtocolMessages.CMD_SYSTEM_PING, {})
 

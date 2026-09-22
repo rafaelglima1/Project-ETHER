@@ -20,12 +20,18 @@ signal error_received(code: String, message: String)
 signal feedback(text: String)
 signal inventory_changed(items: Array)
 signal rtt_changed(ms: int)
+signal target_changed(target_id: String)
+signal combat_result(attacker_id: String, target_id: String, damage: int, critical: bool, target_health: int, target_max_health: int, defeated: bool)
+signal creature_defeated(creature_id: String)
 
 var config: ClientConfig = null
 var network: NetworkClient = null
 var api: ApiClient = null
 var client_state := ClientState.new()
 var world_state := WorldState.new()
+
+## Currently selected entity id (client-side selection only; server authority).
+var selected_target_id := ""
 
 var last_event_name := ""
 var last_error_code := ""
@@ -138,9 +144,43 @@ func request_move(x: int, y: int) -> void:
 		network.move_to(x, y)
 
 
-## M4 has no combat: the client must not emit combat commands.
-func request_attack(_target_id: String) -> void:
-	feedback.emit("Combat is not available yet.")
+## Selects a target entity for the HUD/attack assist. Selection is client-side
+## only; it never changes authoritative state.
+func select_target(target_id: String) -> void:
+	if target_id == selected_target_id:
+		return
+	selected_target_id = target_id
+	target_changed.emit(target_id)
+
+
+func clear_target() -> void:
+	select_target("")
+
+
+## Sends an attack intent (M5). The server decides range, cooldown, damage and
+## death; the client sends nothing but target + ability.
+func request_attack(target_id: String = "", ability_id: String = ProtocolMessages.ABILITY_BASIC_ATTACK) -> void:
+	if network.state.current() != AppState.State.IN_WORLD:
+		feedback.emit("You are not in the world.")
+		return
+	if bool(world_state.player.get("dead", false)):
+		feedback.emit("You cannot attack while dead.")
+		return
+	var resolved := target_id
+	if resolved == "":
+		resolved = selected_target_id
+	if resolved == "":
+		resolved = world_state.nearest_creature(world_state.player_position(), 1)
+	if resolved == "" or not world_state.has_entity(resolved):
+		feedback.emit("No target selected.")
+		return
+	var kind := String(world_state.get_entity(resolved).get("kind", "creature"))
+	var target_type := ProtocolMessages.TARGET_TYPE_CHARACTER if kind == "player" else ProtocolMessages.TARGET_TYPE_CREATURE
+	network.attack(ability_id, resolved, target_type)
+
+
+func request_attack_ability(ability_id: String) -> void:
+	request_attack(selected_target_id, ability_id)
 
 
 func request_interact(_target_id: String) -> void:
@@ -191,6 +231,8 @@ func debug_snapshot() -> Dictionary:
 		"character_id": client_state.selected_character_id,
 		"map_id": world_state.map_id,
 		"position": "%d, %d" % [int(world_state.player.get("x", 0)), int(world_state.player.get("y", 0))],
+		"creatures": world_state.creature_count(),
+		"target": selected_target_id,
 		"last_event": last_event_name,
 		"last_error": last_error_code,
 	}
@@ -270,18 +312,20 @@ func _on_pong(rtt_ms: int) -> void:
 
 func _on_snapshot(payload: Dictionary) -> void:
 	world_state.apply_snapshot(payload)
+	clear_target()
 	var player := world_state.player
 	if player.has("inventory"):
 		client_state.set_inventory(player.get("inventory", []))
 		inventory_changed.emit(client_state.inventory)
 	_entered_world = true
 	network.mark_in_world()
-	log_line("World snapshot: map %d (%dx%d) at (%d,%d)" % [
+	log_line("World snapshot: map %d (%dx%d) at (%d,%d), %d creature(s)" % [
 		world_state.map_id,
 		int(world_state.map.get("width", 0)),
 		int(world_state.map.get("height", 0)),
 		int(player.get("x", 0)),
 		int(player.get("y", 0)),
+		world_state.creature_count(),
 	])
 	world_entered.emit()
 	if _autoplay and not _autoplay_started:
@@ -296,10 +340,52 @@ func _on_event(name: String, payload: Dictionary) -> void:
 		_handle_authenticated(payload)
 	elif name == ProtocolMessages.EVT_MOVEMENT_ACCEPTED:
 		_handle_movement_accepted(payload)
+	elif name == ProtocolMessages.EVT_COMBAT_RESULT:
+		_handle_combat_result(payload)
+	elif name == ProtocolMessages.EVT_CREATURE_SPAWNED:
+		world_state.apply_creature_spawned(payload)
+	elif name == ProtocolMessages.EVT_CREATURE_MOVED:
+		world_state.apply_creature_moved(payload)
+	elif name == ProtocolMessages.EVT_CREATURE_STATE:
+		world_state.apply_creature_state(payload)
+	elif name == ProtocolMessages.EVT_CREATURE_HEALTH:
+		world_state.apply_creature_health(payload)
+	elif name == ProtocolMessages.EVT_CREATURE_DESPAWNED:
+		world_state.apply_creature_despawned(payload)
+		if selected_target_id == String(payload.get("creatureId", payload.get("id", ""))):
+			clear_target()
 	elif name == ProtocolMessages.EVT_SYSTEM_PONG:
 		pass
 	else:
 		log_line("Unhandled event '%s'." % name)
+
+
+func _handle_combat_result(payload: Dictionary) -> void:
+	var result := world_state.apply_combat_result(payload)
+	var attacker_id := String(payload.get("attackerId", ""))
+	var target_id := String(result.get("target_id", ""))
+	var damage := int(payload.get("damage", 0))
+	var critical := bool(payload.get("critical", false))
+	var defeated := bool(result.get("defeated", false))
+
+	combat_result.emit(
+		attacker_id,
+		target_id,
+		damage,
+		critical,
+		int(result.get("target_health", 0)),
+		int(result.get("target_max_health", 0)),
+		defeated)
+
+	if attacker_id == world_state.player_id:
+		feedback.emit("%s for %d damage%s" % ["Critical hit" if critical else "You hit", damage, "!" if critical else ""])
+	elif target_id == world_state.player_id:
+		feedback.emit("You took %d damage." % damage)
+
+	if defeated and target_id != "" and target_id != world_state.player_id:
+		creature_defeated.emit(target_id)
+		if selected_target_id == target_id:
+			clear_target()
 
 
 func _handle_authenticated(payload: Dictionary) -> void:
@@ -356,13 +442,38 @@ func _maybe_autoplay_select(characters: Array) -> void:
 
 func _autoplay_smoke() -> void:
 	await get_tree().create_timer(0.3).timeout
-	request_move(5, 5)
-	await get_tree().create_timer(0.5).timeout
-	var after_move := world_state.player_position()
-	request_move(999, 999)
-	await get_tree().create_timer(0.5).timeout
-	var after_reject := world_state.player_position()
-	log_line("Autoplay smoke done. move=%s rejected_kept=%s" % [str(after_move), str(after_reject)])
+	var creature_id := world_state.nearest_creature(world_state.player_position(), 64)
+	if creature_id == "":
+		log_line("Autoplay: no creatures in snapshot.")
+		return
+
+	var creature_position := world_state.entity_position(creature_id)
+	var adjacent := Vector2i(creature_position.x - 1, creature_position.y)
+	if adjacent.x < 0:
+		adjacent.x = creature_position.x + 1
+	request_move(adjacent.x, adjacent.y)
+	await get_tree().create_timer(0.8).timeout
+
+	for i in range(40):
+		if _autoplay_target_is_done(creature_id):
+			break
+		request_attack(creature_id)
+		await get_tree().create_timer(0.35).timeout
+
+	log_line("Autoplay M6 smoke done. creature_defeated=%s player_hp=%d player_dead=%s creatures=%d" % [
+		str(bool(world_state.get_entity(creature_id).get("dead", false))),
+		int(world_state.player.get("hp", 0)),
+		str(bool(world_state.player.get("dead", false))),
+		world_state.creature_count(),
+	])
+
+
+func _autoplay_target_is_done(creature_id: String) -> bool:
+	if bool(world_state.player.get("dead", false)):
+		return true
+	if not world_state.has_entity(creature_id):
+		return true
+	return bool(world_state.get_entity(creature_id).get("dead", false))
 
 
 # --- Helpers ------------------------------------------------------------------

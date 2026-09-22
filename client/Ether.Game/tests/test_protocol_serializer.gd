@@ -115,3 +115,44 @@ func test_error_user_messages_are_non_technical() -> void:
 	var message := ProtocolErrors.user_message(ProtocolMessages.CODE_OUT_OF_BOUNDS)
 	assert_false(message.contains("OUT_OF_BOUNDS"), "should not leak the raw code")
 	assert_true(message.length() > 0)
+
+
+func test_combat_and_creature_names_are_canonical() -> void:
+	assert_eq(ProtocolMessages.CMD_COMBAT_ATTACK, "combat.attack")
+	assert_eq(ProtocolMessages.EVT_COMBAT_RESULT, "combat.result")
+	assert_eq(ProtocolMessages.ERR_COMBAT_REJECTED, "combat.rejected")
+	assert_eq(ProtocolMessages.EVT_CREATURE_SPAWNED, "creature.spawned")
+	assert_eq(ProtocolMessages.EVT_CREATURE_MOVED, "creature.moved")
+	assert_eq(ProtocolMessages.EVT_CREATURE_STATE, "creature.state")
+	assert_eq(ProtocolMessages.CREATURE_STATE_CHASE, "Chase")
+	assert_eq(ProtocolMessages.TARGET_TYPE_CREATURE, "creature")
+
+
+func test_combat_error_messages_are_non_technical() -> void:
+	var codes := [
+		ProtocolMessages.CODE_ABILITY_NOT_FOUND,
+		ProtocolMessages.CODE_TARGET_NOT_FOUND,
+		ProtocolMessages.CODE_TARGET_DEAD,
+		ProtocolMessages.CODE_ATTACKER_DEAD,
+		ProtocolMessages.CODE_OUT_OF_RANGE,
+		ProtocolMessages.CODE_COOLDOWN_ACTIVE,
+		ProtocolMessages.CODE_SELF_TARGET,
+	]
+	for code in codes:
+		var message := ProtocolErrors.user_message(code)
+		assert_true(message.length() > 0)
+		assert_false(message.contains(code), "should not leak code %s" % code)
+
+
+func test_combat_attack_command_encodes_target_type() -> void:
+	var serializer := ProtocolSerializer.new()
+	var text := serializer.encode_command(ProtocolMessages.CMD_COMBAT_ATTACK, {
+		"abilityId": ProtocolMessages.ABILITY_BASIC_ATTACK,
+		"targetId": "abc",
+		"targetType": ProtocolMessages.TARGET_TYPE_CREATURE,
+	}, 5)
+	var result := serializer.decode(text)
+	assert_true(bool(result["ok"]))
+	var payload: Dictionary = result["envelope"]["payload"]
+	assert_eq(String(payload["targetType"]), "creature")
+	assert_eq(String(payload["abilityId"]), "warrior.basic_attack")

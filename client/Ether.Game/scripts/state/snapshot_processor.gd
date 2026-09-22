@@ -33,18 +33,16 @@ static func _process_canonical(payload: Dictionary) -> Dictionary:
 	})
 
 	var player := normalize_player(as_dict(payload.get("player")))
-	var entities := _optional_entities(payload)
+	var entities := _snapshot_entities(payload)
 
 	return {"map": map, "player": player, "entities": entities}
 
 
 static func _process_legacy(payload: Dictionary) -> Dictionary:
-	var entities: Array = []
-	_collect(payload.get("entities", []), entities)
 	return {
 		"map": normalize_map(as_dict(payload.get("map", {}))),
 		"player": normalize_entity(as_dict(payload.get("player", {}))),
-		"entities": entities,
+		"entities": _snapshot_entities(payload),
 	}
 
 
@@ -74,7 +72,7 @@ static func normalize_player(data: Dictionary) -> Dictionary:
 	return player
 
 
-## Full entity normalization (snapshots / new entities).
+## Full entity normalization (legacy snapshots / new entities).
 static func normalize_entity(item: Variant) -> Dictionary:
 	if typeof(item) != TYPE_DICTIONARY:
 		return {}
@@ -91,6 +89,30 @@ static func normalize_entity(item: Variant) -> Dictionary:
 	}
 	_copy_optional(data, entity)
 	return entity
+
+
+## Canonical M6 creature normalization (snapshot entry or creature.* payload).
+## Accepts `creatureId`/`id`, `health`/`hp`, `maxHealth`/`maxHp`.
+static func normalize_creature(item: Variant) -> Dictionary:
+	if typeof(item) != TYPE_DICTIONARY:
+		return {}
+	var data: Dictionary = item
+	var id := String(data.get("creatureId", data.get("id", data.get("entityId", ""))))
+	if id == "":
+		return {}
+	return {
+		"id": id,
+		"kind": "creature",
+		"definitionId": String(data.get("definitionId", "")),
+		"name": String(data.get("name", "")),
+		"level": int(data.get("level", 1)),
+		"x": int(data.get("x", 0)),
+		"y": int(data.get("y", 0)),
+		"hp": int(data.get("health", data.get("hp", 0))),
+		"maxHp": int(data.get("maxHealth", data.get("maxHp", 0))),
+		"state": String(data.get("state", "")),
+		"dead": bool(data.get("dead", false)),
+	}
 
 
 ## Present-keys-only patch for delta upserts (never clobbers unrelated fields).
@@ -132,16 +154,23 @@ static func _copy_optional(data: Dictionary, target: Dictionary) -> void:
 		target["inventory"] = data["inventory"]
 
 
-static func _optional_entities(payload: Dictionary) -> Array:
+## Collects entities from a snapshot. M6 canonical field is `creatures`; the
+## legacy `entities` array is also accepted. Deduped by id.
+static func _snapshot_entities(payload: Dictionary) -> Array:
+	var by_id := {}
+	_collect(payload.get("creatures", []), by_id, true)
+	_collect(payload.get("entities", []), by_id, false)
+
 	var entities: Array = []
-	_collect(payload.get("entities", []), entities)
+	for id in by_id.keys():
+		entities.append(by_id[id])
 	return entities
 
 
-static func _collect(raw: Variant, out: Array) -> void:
+static func _collect(raw: Variant, by_id: Dictionary, as_creature: bool) -> void:
 	if typeof(raw) != TYPE_ARRAY:
 		return
 	for item in raw:
-		var entity := normalize_entity(item)
+		var entity := normalize_creature(item) if as_creature else normalize_entity(item)
 		if not entity.is_empty():
-			out.append(entity)
+			by_id[String(entity.get("id", ""))] = entity
