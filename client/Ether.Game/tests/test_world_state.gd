@@ -99,34 +99,40 @@ func test_snapshot_with_creatures() -> void:
 	assert_eq(String(slime.get("state", "")), "Idle")
 
 
-func test_apply_creature_moved() -> void:
+func test_apply_creature_update_position_and_state() -> void:
 	var world := WorldState.new()
 	world.apply_snapshot(_creature_snapshot())
-	world.apply_creature_moved({"creatureId": "c1", "mapId": 1, "x": 6, "y": 1})
+	world.apply_creature_update({
+		"creatureId": "c1", "mapId": 1, "x": 6, "y": 1,
+		"health": 30, "maxHealth": 30, "state": "Chase",
+	})
 	assert_eq(world.entity_position("c1"), Vector2i(6, 1))
+	assert_eq(String(world.get_entity("c1").get("state", "")), "Chase")
 
 
-func test_apply_creature_state_dead_excludes_targeting() -> void:
+func test_apply_creature_update_dead_excludes_targeting() -> void:
 	var world := WorldState.new()
 	world.apply_snapshot(_creature_snapshot())
 	assert_eq(world.creature_count(), 1)
-	world.apply_creature_state({"creatureId": "c1", "state": "Dead"})
+	world.apply_creature_update({
+		"creatureId": "c1", "x": 4, "y": 0,
+		"health": 0, "maxHealth": 30, "state": "Dead",
+	})
 	assert_eq(world.creature_count(), 0, "dead creatures are not targetable")
 	assert_eq(world.nearest_creature(Vector2i(0, 0), 10), "", "no targetable creature")
 
 
-func test_apply_creature_health() -> void:
+func test_apply_creature_update_health() -> void:
 	var world := WorldState.new()
 	world.apply_snapshot(_creature_snapshot())
-	world.apply_creature_health({"creatureId": "c1", "health": 17, "maxHealth": 30})
+	world.apply_creature_update({"creatureId": "c1", "x": 4, "y": 0, "health": 17, "maxHealth": 30, "state": "Chase"})
 	assert_eq(int(world.get_entity("c1").get("hp", 0)), 17)
 
 
-func test_apply_creature_despawned() -> void:
+func test_apply_creature_update_unknown_is_ignored() -> void:
 	var world := WorldState.new()
 	world.apply_snapshot(_creature_snapshot())
-	assert_true(world.apply_creature_despawned({"creatureId": "c1"}))
-	assert_false(world.has_entity("c1"))
+	assert_false(world.apply_creature_update({"creatureId": "nope", "x": 1, "y": 1, "state": "Idle"}))
 
 
 func test_apply_combat_result_updates_creature() -> void:

@@ -342,18 +342,10 @@ func _on_event(name: String, payload: Dictionary) -> void:
 		_handle_movement_accepted(payload)
 	elif name == ProtocolMessages.EVT_COMBAT_RESULT:
 		_handle_combat_result(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_SPAWNED:
-		world_state.apply_creature_spawned(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_MOVED:
-		world_state.apply_creature_moved(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_STATE:
-		world_state.apply_creature_state(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_HEALTH:
-		world_state.apply_creature_health(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_DESPAWNED:
-		world_state.apply_creature_despawned(payload)
-		if selected_target_id == String(payload.get("creatureId", payload.get("id", ""))):
-			clear_target()
+	elif name == ProtocolMessages.EVT_WORLD_CREATURE_MOVED:
+		world_state.apply_creature_update(payload)
+		if selected_target_id != "" and not bool(world_state.get_entity(selected_target_id).get("dead", false)):
+			target_changed.emit(selected_target_id)
 	elif name == ProtocolMessages.EVT_SYSTEM_PONG:
 		pass
 	else:

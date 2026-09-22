@@ -27,8 +27,8 @@ gameToken
   │  ◀── world.snapshot      { mapId, width, height, player, creatures[] }
   │  ──▶ movement.move       { x, y }        ◀── movement.accepted { characterId, mapId, x, y }
   │  ──▶ combat.attack       { abilityId, targetId, targetType }
-  │  ◀── combat.result       { attackerId, targetId, damage, critical, targetHealth, targetMaxHealth, targetState, targetDefeated }
-  │  ◀── creature.spawned / creature.moved / creature.state / creature.health / creature.despawned
+  │  ◀── combat.result       { attackerId, targetId, damage, critical, targetHealth, targetMaxHealth, targetState, targetDefeated, attackerType, targetType }
+  │  ◀── world.creature_moved { creatureId, mapId, x, y, health, maxHealth, state }
 ```
 
 The client never moves itself ahead of `movement.accepted`, never runs creature
@@ -137,17 +137,13 @@ Never starts a local backend; exits `2` (BLOCKED) if endpoints are not configure
 
 ---
 
-## Backend contract request (M6)
+## Contract
 
-The backend M6 creature domain (`Ether.Domain.Creatures`) exists but its realtime
-replication is not yet frozen. The client already consumes the proposed additive
-contract documented in `CONTRACTS.md` (`world.snapshot.creatures[]`, the
-`creature.*` events, and `combat.attack.targetType="creature"`). It degrades
-gracefully (a snapshot without `creatures` yields an empty creature set). Once
-the backend freezes the shape, aligning the client is a `SnapshotProcessor`
-change only.
-
-`BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched.
+The client implements the backend contract exactly (ADR-0003 realtime envelope,
+ADR-0004 combat, ADR-0005 creatures + AI): `world.snapshot.creatures[]`,
+`world.creature_moved`, `combat.attack`/`combat.result` with `targetType`.
+Full details in [`CONTRACTS.md`](CONTRACTS.md). No backend contract request is
+pending. `BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched.
 
 ---
 

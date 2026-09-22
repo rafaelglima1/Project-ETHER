@@ -47,16 +47,8 @@ func _on_event(name: String, payload: Dictionary) -> void:
 	elif name == ProtocolMessages.EVT_COMBAT_RESULT:
 		combat_results.append(payload)
 		world.apply_combat_result(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_SPAWNED:
-		world.apply_creature_spawned(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_MOVED:
-		world.apply_creature_moved(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_STATE:
-		world.apply_creature_state(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_HEALTH:
-		world.apply_creature_health(payload)
-	elif name == ProtocolMessages.EVT_CREATURE_DESPAWNED:
-		world.apply_creature_despawned(payload)
+	elif name == ProtocolMessages.EVT_WORLD_CREATURE_MOVED:
+		world.apply_creature_update(payload)
 
 
 func _on_snapshot(payload: Dictionary) -> void:
@@ -255,8 +247,7 @@ func test_creature_ai_chases_and_attacks_player() -> void:
 	_run_to_world()
 	_pump(8.0)
 
-	assert_true(events.has(ProtocolMessages.EVT_CREATURE_MOVED), "creature moved")
-	assert_true(events.has(ProtocolMessages.EVT_CREATURE_STATE), "creature state changed")
+	assert_true(events.has(ProtocolMessages.EVT_WORLD_CREATURE_MOVED), "creature moved")
 	assert_true(_player_attacked_combat_results().size() > 0, "creature attacked the player")
 	assert_true(int(world.player.get("hp", 100)) < 100, "player took damage")
 
@@ -277,7 +268,7 @@ func test_creature_respawns_after_death() -> void:
 	_pump(32.0)
 	assert_false(bool(world.get_entity(creature_id).get("dead", false)), "creature respawned")
 	assert_eq(world.creature_count(), 3, "creature back in the world")
-	assert_true(events.has(ProtocolMessages.EVT_CREATURE_SPAWNED), "creature.spawned received")
+	assert_true(events.has(ProtocolMessages.EVT_WORLD_CREATURE_MOVED), "creature update received")
 
 
 func test_wrong_character_movement_is_ignored() -> void:

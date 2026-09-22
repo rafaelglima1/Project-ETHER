@@ -8,8 +8,8 @@ extends RefCounted
 ## mock and real modes:
 ##   commands: game.authenticate, world.enter, movement.move, combat.attack, system.ping
 ##   events:   game.authenticated, world.snapshot, movement.accepted, combat.result, system.pong
-##   creature: creature.spawned, creature.moved, creature.state, creature.health, creature.despawned
-##   errors:   protocol.error, *, .rejected (movement/world.enter/game.authenticate/combat)
+##   creature: world.creature_moved (position + health + state; also respawn)
+##   errors:   protocol.error, *.rejected (movement/world.enter/game.authenticate/combat)
 ##
 ## Damage, criticals, HP, death and creature AI are computed *here* precisely
 ## because the real client must never do so.
@@ -277,10 +277,9 @@ func _handle_attack(payload: Dictionary, request_id: String, sequence: int) -> A
 		"targetMaxHealth": int(creature["maxHp"]),
 		"targetState": String(creature["state"]),
 		"targetDefeated": defeated,
+		"attackerType": ProtocolMessages.TARGET_TYPE_CHARACTER,
+		"targetType": ProtocolMessages.TARGET_TYPE_CREATURE,
 	}, request_id, sequence)]
-
-	if defeated:
-		out.append(_event(ProtocolMessages.EVT_CREATURE_STATE, {"creatureId": target_id, "state": ProtocolMessages.CREATURE_STATE_DEAD}, "", sequence))
 	return out
 
 
@@ -312,32 +311,37 @@ func _run_creature_ai() -> Array:
 		if not _creature_alive(creature):
 			if creature.get("respawnAt", null) != null and _clock >= float(creature["respawnAt"]):
 				_respawn_creature(creature)
-				out.append(_creature_spawned_event(creature))
+				out.append(_creature_moved_event(creature))
 			continue
+
+		var before_x := int(creature["x"])
+		var before_y := int(creature["y"])
+		var before_state := String(creature["state"])
 
 		var distance_to_player := maxi(absi(_player_x - int(creature["x"])), absi(_player_y - int(creature["y"])))
 		var attack_range := int(creature["attackRange"])
 
 		if _player_dead or distance_to_player > int(creature["aggroRange"]):
-			# No aggro: return home if strayed, else idle.
 			var home := maxi(absi(int(creature["spawnX"]) - int(creature["x"])), absi(int(creature["spawnY"]) - int(creature["y"])))
 			if home > 0:
-				_move_creature_toward(creature, int(creature["spawnX"]), int(creature["spawnY"]), out)
-			continue
-
-		if distance_to_player <= attack_range:
-			_set_creature_state(creature, ProtocolMessages.CREATURE_STATE_ATTACK, out)
+				creature["state"] = ProtocolMessages.CREATURE_STATE_RETURN
+				_move_creature_toward(creature, int(creature["spawnX"]), int(creature["spawnY"]))
+		elif distance_to_player <= attack_range:
+			creature["state"] = ProtocolMessages.CREATURE_STATE_ATTACK
 			if _clock >= float(creature.get("attackReadyAt", 0.0)):
 				creature["attackReadyAt"] = _clock + float(creature["attackCooldown"])
 				_creature_attacks_player(creature, out)
 		else:
-			_set_creature_state(creature, ProtocolMessages.CREATURE_STATE_CHASE, out)
-			_move_creature_toward(creature, _player_x, _player_y, out)
+			creature["state"] = ProtocolMessages.CREATURE_STATE_CHASE
+			_move_creature_toward(creature, _player_x, _player_y)
+
+		if int(creature["x"]) != before_x or int(creature["y"]) != before_y or String(creature["state"]) != before_state:
+			out.append(_creature_moved_event(creature))
 
 	return out
 
 
-func _move_creature_toward(creature: Dictionary, target_x: int, target_y: int, out: Array) -> void:
+func _move_creature_toward(creature: Dictionary, target_x: int, target_y: int) -> void:
 	if _clock < float(creature.get("nextMoveAt", 0.0)):
 		return
 	creature["nextMoveAt"] = _clock + (1.0 / maxf(1.0, float(creature["moveSpeed"])))
@@ -353,7 +357,6 @@ func _move_creature_toward(creature: Dictionary, target_x: int, target_y: int, o
 
 	creature["x"] = nx
 	creature["y"] = ny
-	out.append(_event(ProtocolMessages.EVT_CREATURE_MOVED, {"creatureId": creature["id"], "mapId": MAP_ID, "x": nx, "y": ny}, "", 0))
 
 
 func _creature_attacks_player(creature: Dictionary, out: Array) -> void:
@@ -373,6 +376,8 @@ func _creature_attacks_player(creature: Dictionary, out: Array) -> void:
 		"targetMaxHealth": PLAYER_MAX_HEALTH,
 		"targetState": "Dead" if _player_dead else "Combat",
 		"targetDefeated": _player_dead,
+		"attackerType": ProtocolMessages.TARGET_TYPE_CREATURE,
+		"targetType": ProtocolMessages.TARGET_TYPE_CHARACTER,
 	}, "", 0))
 
 
@@ -422,15 +427,16 @@ func _creature_alive(creature: Dictionary) -> bool:
 	return int(creature.get("hp", 0)) > 0 and state != ProtocolMessages.CREATURE_STATE_DEAD and state != ProtocolMessages.CREATURE_STATE_RESPAWNING
 
 
-func _set_creature_state(creature: Dictionary, state: String, out: Array) -> void:
-	if String(creature.get("state", "")) == state:
-		return
-	creature["state"] = state
-	out.append(_event(ProtocolMessages.EVT_CREATURE_STATE, {"creatureId": creature["id"], "state": state}, "", 0))
-
-
-func _creature_spawned_event(creature: Dictionary) -> Dictionary:
-	return _event(ProtocolMessages.EVT_CREATURE_SPAWNED, _creature_view(creature), "", 0)
+func _creature_moved_event(creature: Dictionary) -> Dictionary:
+	return _event(ProtocolMessages.EVT_WORLD_CREATURE_MOVED, {
+		"creatureId": creature["id"],
+		"mapId": MAP_ID,
+		"x": creature["x"],
+		"y": creature["y"],
+		"health": creature["hp"],
+		"maxHealth": creature["maxHp"],
+		"state": creature["state"],
+	}, "", 0)
 
 
 func _creature_view(creature: Dictionary) -> Dictionary:

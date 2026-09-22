@@ -121,9 +121,7 @@ func test_combat_and_creature_names_are_canonical() -> void:
 	assert_eq(ProtocolMessages.CMD_COMBAT_ATTACK, "combat.attack")
 	assert_eq(ProtocolMessages.EVT_COMBAT_RESULT, "combat.result")
 	assert_eq(ProtocolMessages.ERR_COMBAT_REJECTED, "combat.rejected")
-	assert_eq(ProtocolMessages.EVT_CREATURE_SPAWNED, "creature.spawned")
-	assert_eq(ProtocolMessages.EVT_CREATURE_MOVED, "creature.moved")
-	assert_eq(ProtocolMessages.EVT_CREATURE_STATE, "creature.state")
+	assert_eq(ProtocolMessages.EVT_WORLD_CREATURE_MOVED, "world.creature_moved")
 	assert_eq(ProtocolMessages.CREATURE_STATE_CHASE, "Chase")
 	assert_eq(ProtocolMessages.TARGET_TYPE_CREATURE, "creature")
 

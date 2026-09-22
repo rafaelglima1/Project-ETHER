@@ -91,50 +91,30 @@ func apply_movement(payload: Dictionary) -> Dictionary:
 	return {"applied": true, "reason": ""}
 
 
-# --- Creature replication (M6) -------------------------------------------------
+# --- Creature replication (M6, ADR-0005) --------------------------------------
 
-func apply_creature_spawned(payload: Dictionary) -> bool:
-	var creature := SnapshotProcessor.normalize_creature(payload)
-	if creature.is_empty():
-		return false
-	_upsert_entity(creature)
-	return true
-
-
-func apply_creature_moved(payload: Dictionary) -> bool:
+## Applies a `world.creature_moved` payload: position, health, maxHealth and AI
+## state in a single event. Returns true when a known creature was updated.
+func apply_creature_update(payload: Dictionary) -> bool:
 	var id := String(payload.get("creatureId", payload.get("id", "")))
 	if id == "" or not has_entity(id):
 		return false
-	_upsert_entity({"id": id, "x": int(payload.get("x", 0)), "y": int(payload.get("y", 0))})
-	return true
 
+	var patch := {"id": id}
+	if payload.has("x"):
+		patch["x"] = int(payload["x"])
+	if payload.has("y"):
+		patch["y"] = int(payload["y"])
+	if payload.has("health"):
+		patch["hp"] = int(payload["health"])
+	if payload.has("maxHealth"):
+		patch["maxHp"] = int(payload["maxHealth"])
+	if payload.has("state"):
+		var state := String(payload["state"])
+		patch["state"] = state
+		patch["dead"] = is_dead_state(state)
 
-func apply_creature_state(payload: Dictionary) -> bool:
-	var id := String(payload.get("creatureId", payload.get("id", "")))
-	if id == "" or not has_entity(id):
-		return false
-	var state := String(payload.get("state", ""))
-	_upsert_entity({"id": id, "state": state, "dead": is_dead_state(state)})
-	return true
-
-
-func apply_creature_health(payload: Dictionary) -> bool:
-	var id := String(payload.get("creatureId", payload.get("id", "")))
-	if id == "" or not has_entity(id):
-		return false
-	_upsert_entity({
-		"id": id,
-		"hp": int(payload.get("health", payload.get("hp", 0))),
-		"maxHp": int(payload.get("maxHealth", payload.get("maxHp", 0))),
-	})
-	return true
-
-
-func apply_creature_despawned(payload: Dictionary) -> bool:
-	var id := String(payload.get("creatureId", payload.get("id", "")))
-	if id == "":
-		return false
-	remove_entity(id)
+	_upsert_entity(patch)
 	return true
 
 

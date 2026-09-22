@@ -49,17 +49,14 @@ The client sends intent only; it never sends damage, criticals or HP.
 
 ---
 
-## M6 — creatures + AI (client contract; backend replication not yet frozen)
+## M6 — creatures + AI (frozen in ADR-0005)
 
-> **Status:** the backend M6 domain (`Ether.Domain.Creatures`) exists, but the
-> realtime replication of creatures is not yet committed. The client implements
-> the contract below and is tolerant of its absence (a snapshot without
-> `creatures` simply yields an empty creature set). This is a
-> `BACKEND_CONTRACT_REQUEST` — see the client README.
+Creature instances are transient world state. The server replicates them
+additively; M4/M5 messages are unchanged.
 
 ### Snapshot extension (additive)
 
-`world.snapshot` may include a `creatures` array (alias: `entities`):
+`world.snapshot` includes a `creatures` array:
 
 ```json
 {
@@ -67,26 +64,31 @@ The client sends intent only; it never sends damage, criticals or HP.
   "player": { "characterId": "...", "x": 10, "y": 12, "state": "InWorld" },
   "creatures": [
     { "creatureId": "...", "definitionId": "creature.slime", "name": "Slime",
-      "level": 1, "x": 6, "y": 7, "health": 30, "maxHealth": 30, "state": "Idle" }
+      "x": 6, "y": 7, "health": 30, "maxHealth": 30, "state": "Idle" }
   ],
   "serverTime": "..."
 }
 ```
 
-### Creature lifecycle events (additive)
+### Creature replication event (additive)
 
 | Dir | Name | Payload |
 | --- | --- | --- |
-| S→C | `creature.spawned` | `{ creatureId, definitionId, name, level, x, y, health, maxHealth, state }` |
-| S→C | `creature.moved` | `{ creatureId, mapId, x, y }` |
-| S→C | `creature.state` | `{ creatureId, state }` |
-| S→C | `creature.health` | `{ creatureId, health, maxHealth }` |
-| S→C | `creature.despawned` | `{ creatureId }` |
+| S→C | `world.creature_moved` | `{ creatureId, mapId, x, y, health, maxHealth, state }` |
+
+A single event carries position, health and AI state (also used for respawn).
+Creature attacks on the player are ordinary `combat.result` messages with
+`attackerType="creature"`, `targetType="character"`.
 
 `state` ∈ `Idle | Patrol | Investigate | Chase | Attack | Flee | Return | Dead | Respawning`.
-Creature attacks on the player are delivered as ordinary `combat.result`
-messages with `attackerId` = creature id and `targetId` = player id.
 
-The client treats these events as presentation updates only: positions, HP,
-state and death always come from the server. The client never runs creature AI
-or computes creature damage.
+### Combat additive fields
+
+`combat.attack` payload: `{ abilityId, targetId, targetType }` where `targetType`
+is `"character"` (default) or `"creature"`.
+`combat.result` payload adds `attackerType` / `targetType` (default `"character"`).
+
+The client treats all creature data as presentation only: positions, HP, state
+and death always come from the server. The client never runs creature AI or
+computes creature damage.
+

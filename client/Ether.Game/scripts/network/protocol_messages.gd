@@ -30,12 +30,8 @@ const EVT_MOVEMENT_ACCEPTED := "movement.accepted"
 const EVT_COMBAT_RESULT := "combat.result"
 const EVT_SYSTEM_PONG := "system.pong"
 
-# --- Server -> Client creature lifecycle events (M6, additive) ---
-const EVT_CREATURE_SPAWNED := "creature.spawned"
-const EVT_CREATURE_MOVED := "creature.moved"
-const EVT_CREATURE_STATE := "creature.state"
-const EVT_CREATURE_HEALTH := "creature.health"
-const EVT_CREATURE_DESPAWNED := "creature.despawned"
+# --- Server -> Client creature replication (M6, additive; frozen in ADR-0005) ---
+const EVT_WORLD_CREATURE_MOVED := "world.creature_moved"
 
 # --- Server -> Client error message names ---
 const ERR_PROTOCOL := "protocol.error"
