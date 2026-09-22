@@ -14,10 +14,11 @@ The current technical contract is **Blueprint v5.0**.
 
 **Milestone M0 — Foundation.**
 
-M0, M1, M2, M3 and M4 are complete. The next work item is combat (M5). See
+M0–M5 are complete. The next work item is creatures + AI (M6). See
 [`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md),
-[`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md)
-and [`docs/decisions/ADR-0003`](docs/decisions/ADR-0003-realtime-protocol.md).
+[`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md),
+[`docs/decisions/ADR-0003`](docs/decisions/ADR-0003-realtime-protocol.md) and
+[`docs/decisions/ADR-0004`](docs/decisions/ADR-0004-combat-foundation.md).
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
@@ -26,24 +27,29 @@ and [`docs/decisions/ADR-0003`](docs/decisions/ADR-0003-realtime-protocol.md).
 | M2 | Auth/session foundation (credentials, JWT access/refresh, game token) | ✅ Done |
 | M3 | World/movement foundation (bounded map, enter world, authoritative move) | ✅ Done |
 | M4 | GameServer WebSocket / first realtime world | ✅ Done |
-| M5 | Combat foundation | ⏭ Next |
-| Later | Creatures + AI, XP, loot, inventory | — |
+| M5 | Combat foundation (server-authoritative attack, damage, HP) | ✅ Done |
+| M6 | Creatures + AI | ⏭ Next |
+| Later | XP, loot, inventory | — |
 
 ### Realtime (GameServer WebSocket)
 
 `GET /game` (WebSocket, `WebSocket:Path`) is the canonical realtime endpoint; the
 envelope, message names, error codes, session lifecycle, heartbeat, sequence and
-authority rules are defined in **ADR-0003**. Flow:
+authority rules are defined in **ADR-0003** (combat messages in **ADR-0004**). Flow:
 
 ```
 connect → game.authenticate (game token) → game.authenticated
         → world.enter → world.snapshot
         → movement.move → movement.accepted | movement.rejected
+        → combat.attack → combat.result | combat.rejected
         → system.ping → system.pong
 ```
 
 Access and refresh tokens are rejected at authentication; the character identity
-used by the server always comes from the token, never from client input.
+used by the server always comes from the token, never from client input. For
+`combat.attack` the client sends only `{ abilityId, targetId }` — damage, critical,
+armor and HP are resolved entirely by the server.
+
 
 
 ## Architecture

@@ -20,6 +20,9 @@ internal sealed class CharacterConfiguration : IEntityTypeConfiguration<Characte
             table.HasCheckConstraint("ck_characters_experience", "experience >= 0");
             table.HasCheckConstraint("ck_characters_map_id", "map_id >= 1");
             table.HasCheckConstraint("ck_characters_name_not_blank", "char_length(btrim(name)) > 0");
+            table.HasCheckConstraint("ck_characters_max_health_positive", "max_health >= 1");
+            table.HasCheckConstraint("ck_characters_health_non_negative", "health >= 0");
+            table.HasCheckConstraint("ck_characters_health_within_max", "health <= max_health");
         });
 
         builder.HasKey(character => character.Id);
@@ -50,6 +53,14 @@ internal sealed class CharacterConfiguration : IEntityTypeConfiguration<Characte
 
         builder.Property(character => character.Experience)
             .HasColumnName("experience");
+
+        builder.Property(character => character.MaxHealth)
+            .HasColumnName("max_health")
+            .HasDefaultValue(Character.DefaultMaxHealth);
+
+        builder.Property(character => character.Health)
+            .HasColumnName("health")
+            .HasDefaultValue(Character.DefaultMaxHealth);
 
         builder.Property(character => character.MapId)
             .HasColumnName("map_id")

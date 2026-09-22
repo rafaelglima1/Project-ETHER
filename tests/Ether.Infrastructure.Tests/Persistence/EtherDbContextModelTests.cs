@@ -135,5 +135,22 @@ public sealed class EtherDbContextModelTests
         Assert.Contains("ck_characters_experience", constraints);
         Assert.Contains("ck_characters_map_id", constraints);
         Assert.Contains("ck_characters_name_not_blank", constraints);
+        Assert.Contains("ck_characters_max_health_positive", constraints);
+        Assert.Contains("ck_characters_health_non_negative", constraints);
+        Assert.Contains("ck_characters_health_within_max", constraints);
+    }
+
+    [Fact]
+    public void Character_health_columns_have_defaults()
+    {
+        var character = CreateModel().FindEntityType(typeof(Character))!;
+
+        var maxHealth = character.FindProperty(nameof(Character.MaxHealth))!;
+        var health = character.FindProperty(nameof(Character.Health))!;
+
+        Assert.Equal("max_health", maxHealth.GetColumnName());
+        Assert.Equal("health", health.GetColumnName());
+        Assert.Equal(Character.DefaultMaxHealth, maxHealth.GetDefaultValue());
+        Assert.Equal(Character.DefaultMaxHealth, health.GetDefaultValue());
     }
 }

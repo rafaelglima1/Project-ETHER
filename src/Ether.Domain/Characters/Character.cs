@@ -16,6 +16,7 @@ public sealed class Character
     public const int InitialLevel = 1;
     public const long InitialExperience = 0;
     public const int MaxNameLength = 24;
+    public const int DefaultMaxHealth = 100;
 
     private Character()
     {
@@ -28,6 +29,7 @@ public sealed class Character
         string name,
         CharacterClass characterClass,
         WorldPosition position,
+        int maxHealth,
         DateTimeOffset nowUtc)
     {
         Id = id;
@@ -37,6 +39,8 @@ public sealed class Character
         State = CharacterState.Offline;
         Level = InitialLevel;
         Experience = InitialExperience;
+        MaxHealth = maxHealth;
+        Health = maxHealth;
         MapId = position.MapId;
         PositionX = position.X;
         PositionY = position.Y;
@@ -58,6 +62,10 @@ public sealed class Character
 
     public long Experience { get; private set; }
 
+    public int MaxHealth { get; private set; }
+
+    public int Health { get; private set; }
+
     public MapId MapId { get; private set; }
 
     public int PositionX { get; private set; }
@@ -77,7 +85,8 @@ public sealed class Character
         string name,
         CharacterClass characterClass,
         WorldPosition position,
-        DateTimeOffset nowUtc)
+        DateTimeOffset nowUtc,
+        int maxHealth = DefaultMaxHealth)
     {
         if (accountId.IsEmpty)
         {
@@ -89,13 +98,69 @@ public sealed class Character
             throw new DomainException("Character class is invalid.");
         }
 
+        if (maxHealth < 1)
+        {
+            throw new DomainException("Character max health must be positive.");
+        }
+
         return new Character(
             CharacterId.New(),
             accountId,
             NormalizeName(name),
             characterClass,
             position,
+            maxHealth,
             nowUtc);
+    }
+
+    /// <summary>True while the character has health remaining.</summary>
+    public bool IsAlive => Health > 0;
+
+    /// <summary>
+    /// Marks the character as engaged in combat (InWorld → Combat).
+    /// Already-combat characters are left unchanged.
+    /// </summary>
+    public void EnterCombat(DateTimeOffset nowUtc)
+    {
+        if (State == CharacterState.Combat)
+        {
+            return;
+        }
+
+        if (State != CharacterState.InWorld)
+        {
+            throw new InvalidStateException($"Character cannot enter combat from state {State}.");
+        }
+
+        ChangeState(CharacterState.Combat, nowUtc);
+    }
+
+    /// <summary>
+    /// Applies server-calculated damage. Health is floored at 0 and the character
+    /// becomes Dead when it reaches 0. Returns true when the hit was lethal.
+    /// </summary>
+    public bool ApplyDamage(int damage, DateTimeOffset nowUtc)
+    {
+        if (damage < 0)
+        {
+            throw new DomainException("Damage must not be negative.");
+        }
+
+        if (!IsAlive)
+        {
+            throw new InvalidStateException("A dead character cannot take damage.");
+        }
+
+        Health = Math.Max(0, Health - damage);
+        UpdatedAt = nowUtc;
+
+        if (Health > 0)
+        {
+            return false;
+        }
+
+        ChangeState(CharacterState.Dead, nowUtc);
+        return true;
     }
 
     /// <summary>Changes the lifecycle state, rejecting invalid transitions.</summary>

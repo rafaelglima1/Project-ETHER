@@ -4,7 +4,9 @@ using Ether.Infrastructure.Accounts;
 using Ether.Infrastructure.Authentication;
 using Ether.Infrastructure.Characters;
 using Ether.Infrastructure.Dependencies;
+using Ether.Infrastructure.Memory;
 using Ether.Infrastructure.Persistence;
+using Ether.Infrastructure.Random;
 using Ether.Infrastructure.Redis;
 using Ether.Infrastructure.Security;
 using Ether.Infrastructure.World;
@@ -46,6 +48,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<GameServerOptions>(configuration.GetSection(GameServerOptions.SectionName));
         services.Configure<CharacterOptions>(configuration.GetSection(CharacterOptions.SectionName));
         services.Configure<WorldOptions>(configuration.GetSection(WorldOptions.SectionName));
+        services.Configure<CombatOptions>(configuration.GetSection(CombatOptions.SectionName));
 
         // Authentication options are validated at startup: in Production a usable
         // signing key is mandatory and the development placeholder is rejected.
@@ -89,6 +92,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
         services.AddSingleton<IWorldMapProvider, StaticWorldMapProvider>();
+
+        // Combat runtime coordination (M5): process-local cooldowns, entity locks and RNG.
+        services.AddSingleton<IAbilityCooldownStore, InMemoryAbilityCooldownStore>();
+        services.AddSingleton<IEntityLockProvider, InMemoryEntityLockProvider>();
+        services.AddSingleton<Ether.Domain.Combat.IRandomSource, SharedRandomSource>();
 
         // Repositories and unit of work depend on the always-registered EF Core context.
         services.AddScoped<IAccountRepository, EfAccountRepository>();

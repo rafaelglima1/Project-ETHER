@@ -72,4 +72,33 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
 
     public Task SeedAccountAsync(Account account, CancellationToken cancellationToken = default) =>
         AddAsync(account, cancellationToken);
+
+    /// <summary>Seeds an account with an in-world character at the given tile.</summary>
+    public async Task<(AccountId AccountId, Character Character)> SeedInWorldCharacterAsync(
+        string name,
+        int x,
+        int y,
+        int maxHealth = Character.DefaultMaxHealth,
+        CancellationToken cancellationToken = default)
+    {
+        var account = Account.Create(
+            new Email($"acct-{Guid.NewGuid():N}@ether.local"),
+            new PasswordHash("hashed:x"),
+            DateTimeOffset.UtcNow);
+        await AddAsync(account, cancellationToken);
+
+        var character = Character.Create(
+            account.Id,
+            name,
+            CharacterClass.Warrior,
+            new Ether.Domain.World.WorldPosition(new Ether.Domain.World.MapId(1), x, y),
+            DateTimeOffset.UtcNow,
+            maxHealth);
+
+        await AddAsync(character, cancellationToken);
+        await SaveChangesAsync(cancellationToken);
+        character.EnterWorld(DateTimeOffset.UtcNow);
+
+        return (account.Id, character);
+    }
 }

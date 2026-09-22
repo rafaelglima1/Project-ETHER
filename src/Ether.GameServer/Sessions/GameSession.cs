@@ -14,9 +14,8 @@ namespace Ether.GameServer.Sessions;
 public sealed class GameSession
 {
     private readonly object _rateGate = new();
+    private readonly Dictionary<string, (long Second, int Count)> _rateWindows = new(StringComparer.Ordinal);
     private long _outboundSequence;
-    private long _rateWindowSecond = -1;
-    private int _rateCount;
 
     public GameSession(int maxQueuedCommands, DateTimeOffset connectedAt)
     {
@@ -62,28 +61,34 @@ public sealed class GameSession
     public CancellationTokenSource Lifetime { get; } = new();
 
     /// <summary>
-    /// Simple per-session rate limiter (counts within an epoch-second window).
+    /// Simple per-session, per-bucket rate limiter (epoch-second window).
     /// Returns false when the budget for the current second is exhausted.
     /// </summary>
-    public bool TryAcquireRateSlot(long epochSecond, int maxPerSecond)
+    public bool TryAcquireRateSlot(string bucket, long epochSecond, int maxPerSecond)
     {
         lock (_rateGate)
         {
-            if (_rateWindowSecond != epochSecond)
+            _rateWindows.TryGetValue(bucket, out var window);
+
+            if (window.Second != epochSecond)
             {
-                _rateWindowSecond = epochSecond;
-                _rateCount = 0;
+                window = (epochSecond, 0);
             }
 
-            if (_rateCount >= maxPerSecond)
+            if (window.Count >= maxPerSecond)
             {
+                _rateWindows[bucket] = window;
                 return false;
             }
 
-            _rateCount++;
+            _rateWindows[bucket] = (window.Second, window.Count + 1);
             return true;
         }
     }
+
+    /// <summary>Movement rate limit (M4 behaviour preserved).</summary>
+    public bool TryAcquireRateSlot(long epochSecond, int maxPerSecond) =>
+        TryAcquireRateSlot("movement", epochSecond, maxPerSecond);
 
     public long NextOutboundSequence() => Interlocked.Increment(ref _outboundSequence);
 

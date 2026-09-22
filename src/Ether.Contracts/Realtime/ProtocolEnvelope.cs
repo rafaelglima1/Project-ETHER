@@ -44,12 +44,14 @@ public static class ProtocolMessageNames
     public const string GameAuthenticate = "game.authenticate";
     public const string WorldEnter = "world.enter";
     public const string MovementMove = "movement.move";
+    public const string CombatAttack = "combat.attack";
     public const string SystemPing = "system.ping";
 
     // server -> client
     public const string GameAuthenticated = "game.authenticated";
     public const string WorldSnapshot = "world.snapshot";
     public const string MovementAccepted = "movement.accepted";
+    public const string CombatResult = "combat.result";
     public const string SystemPong = "system.pong";
     public const string ProtocolError = "protocol.error";
 
@@ -57,6 +59,7 @@ public static class ProtocolMessageNames
     public const string GameAuthenticateRejected = "game.authenticate.rejected";
     public const string WorldEnterRejected = "world.enter.rejected";
     public const string MovementRejected = "movement.rejected";
+    public const string CombatRejected = "combat.rejected";
 }
 
 /// <summary>Deterministic error codes returned to clients (never stack traces).</summary>
@@ -83,4 +86,13 @@ public static class ProtocolErrorCodes
     public const string RateLimited = "RATE_LIMITED";
     public const string ServerBusy = "SERVER_BUSY";
     public const string InternalError = "INTERNAL_ERROR";
+
+    // combat
+    public const string AbilityNotFound = "ABILITY_NOT_FOUND";
+    public const string TargetNotFound = "TARGET_NOT_FOUND";
+    public const string TargetDead = "TARGET_DEAD";
+    public const string AttackerDead = "ATTACKER_DEAD";
+    public const string OutOfRange = "OUT_OF_RANGE";
+    public const string CooldownActive = "COOLDOWN_ACTIVE";
+    public const string SelfTarget = "SELF_TARGET";
 }

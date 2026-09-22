@@ -1,9 +1,12 @@
 using Ether.Application.Accounts;
 using Ether.Application.Auth;
 using Ether.Application.Characters;
+using Ether.Application.Combat;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+
+using Ether.Application.Abstractions;
 
 namespace Ether.Application.DependencyInjection;
 
@@ -28,6 +31,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<EnterWorldHandler>();
         services.AddScoped<MoveCharacterHandler>();
         services.AddScoped<IssueGameTokenHandler>();
+
+        // Combat (M5).
+        services.TryAddSingleton<ICombatStatsProvider, LevelBasedCombatStatsProvider>();
+        services.AddScoped<AttackCommandHandler>();
 
         return services;
     }

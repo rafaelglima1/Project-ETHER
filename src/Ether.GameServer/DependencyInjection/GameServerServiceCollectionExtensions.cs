@@ -27,6 +27,7 @@ public static class GameServerServiceCollectionExtensions
         services.AddScoped<IProtocolCommandHandler, AuthenticateCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, EnterWorldCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, MovementCommandHandler>();
+        services.AddScoped<IProtocolCommandHandler, CombatAttackCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, PingCommandHandler>();
 
         // Lifecycle.
