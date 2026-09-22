@@ -38,8 +38,9 @@ func poll(delta: float) -> void:
 	if _pending_open >= 0.0 and _clock >= _pending_open:
 		_pending_open = -1.0
 		_open = true
+		var welcome := _backend.on_connect()
 		opened.emit()
-		for envelope in _backend.on_connect():
+		for envelope in welcome:
 			_queue(envelope)
 
 	if _open:

@@ -4,584 +4,268 @@ extends RefCounted
 ## In-process fake GameServer used by MockTransport.
 ##
 ## IMPORTANT: this is *server-role* code standing in for the authoritative
-## backend. It computes damage, death, XP and loot precisely because the real
-## client must never do so (Blueprint v5.0 §89). The client-side code that
-## consumes it stays 100% server-authoritative: swap this backend for the real
-## WebSocket GameServer and nothing above the transport layer changes.
+## backend. It implements the canonical M4 realtime contract exactly
+## (ADR-0003) so the client flow is identical in mock and real modes:
+##   commands: game.authenticate, world.enter, movement.move, system.ping
+##   events:   game.authenticated, world.snapshot, movement.accepted, system.pong
+##   errors:   protocol.error, movement.rejected, world.enter.rejected,
+##             game.authenticate.rejected
 ##
-## Numbers here are throwaway mock values, not canonical game rules.
+## It keeps just enough account/character state for offline play; it is not a
+## business-rule authority (no combat, XP, loot or inventory in M4).
 
-const MAP_WIDTH := 24
-const MAP_HEIGHT := 16
-const TILE_SIZE := 32
-const MAX_MOVE_DISTANCE := 8
-const PLAYER_SPAWN := Vector2i(5, 5)
+const MAP_WIDTH := 32
+const MAP_HEIGHT := 32
+const MAP_ID := 1
+const MAX_MOVE_DISTANCE := 12
+const START_X := 0
+const START_Y := 0
 
-const CREATURE_TEMPLATES := [
-	{"name": "Slime", "hp": 35, "xp": 12, "attack": 3},
-	{"name": "Rat", "hp": 24, "xp": 8, "attack": 2},
-	{"name": "Boar", "hp": 48, "xp": 18, "attack": 5},
-]
+const STATE_CONNECTING := 0
+const STATE_AUTHENTICATED := 1
+const STATE_IN_WORLD := 2
 
+var account_id := "00000000-0000-4000-8000-0000000000a1"
+var account_email := "hero@example.com"
 var session_id := ""
-var server_sequence := 0
-var connected := false
-var authenticated := false
-var account_id := "mock-account-0001"
-var display_name := "Adventurer"
-var in_world := false
+var selected_character_id := ""
 
 var characters: Array = []
-var selected_character_id := ""
-var player: Dictionary = {}
-var creatures: Dictionary = {}
-var inventory: Array = []
 
-var _id_counter := 0
-var _creature_timer := 0.0
-var _creature_interval := 0.9
-var _respawn_timer := 0.0
-var _pending_respawn := false
+var _state: int = STATE_CONNECTING
+var _outbound_sequence := 0
+var _last_inbound_sequence := 0
+var _player_x := START_X
+var _player_y := START_Y
 var _rng := RandomNumberGenerator.new()
 
 
 func _init() -> void:
 	_rng.randomize()
-	session_id = _new_id("session")
+	session_id = _new_guid()
 	_seed_characters()
 
 
 func reset() -> void:
-	server_sequence = 0
-	connected = false
-	authenticated = false
-	in_world = false
-	selected_character_id = ""
-	player = {}
-	creatures = {}
-	inventory = []
-	characters = []
-	_pending_respawn = false
-	_respawn_timer = 0.0
-	_seed_characters()
+	_state = STATE_CONNECTING
+	_outbound_sequence = 0
+	_last_inbound_sequence = 0
+	_player_x = START_X
+	_player_y = START_Y
+	session_id = _new_guid()
+
+
+func authenticate_account(email: String) -> void:
+	var trimmed := email.strip_edges()
+	if trimmed != "":
+		account_email = trimmed
+
+
+func display_name() -> String:
+	var at := account_email.find("@")
+	return account_email.substr(0, at) if at > 0 else account_email
+
+
+func issue_game_token(character_id: String) -> void:
+	selected_character_id = character_id
 
 
 # --- Transport-facing API -----------------------------------------------------
 
 func on_connect() -> Array:
-	connected = true
-	return [_event(ProtocolMessages.EVT_CONNECTED, {"sessionId": session_id})]
+	reset()
+	return []
 
 
 func on_disconnect() -> void:
-	connected = false
-	in_world = false
+	_state = STATE_CONNECTING
+	_player_x = START_X
+	_player_y = START_Y
+
+
+func tick(_delta: float) -> Array:
+	return []
 
 
 ## Accepts a raw command string and returns an Array of envelope dictionaries.
 func handle_text(text: String) -> Array:
 	var parsed: Variant = JSON.parse_string(text)
 	if typeof(parsed) != TYPE_DICTIONARY:
-		return [_error(ProtocolMessages.ERR_INVALID_COMMAND, "Malformed command envelope.")]
+		return [_error(ProtocolMessages.ERR_PROTOCOL, ProtocolMessages.CODE_INVALID_ENVELOPE, "Malformed envelope.", "", 0)]
 
 	var envelope: Dictionary = parsed
-	var command := String(envelope.get("name", ""))
-	if command == "":
-		command = String(envelope.get("type", ""))
-
-	var raw_payload: Variant = envelope.get("payload", {})
+	var name := String(envelope.get("name", ""))
+	var request_id := String(envelope.get("requestId", "")) if envelope.get("requestId", null) != null else ""
+	var sequence := int(envelope.get("sequence", 0))
+	var raw_payload: Variant = envelope.get("payload", null)
 	var payload: Dictionary = raw_payload if typeof(raw_payload) == TYPE_DICTIONARY else {}
 
-	if command == ProtocolMessages.CMD_AUTHENTICATE:
-		return _handle_authenticate(payload)
-	elif command == ProtocolMessages.CMD_CREATE_CHARACTER:
-		return _handle_create_character(payload)
-	elif command == ProtocolMessages.CMD_SELECT_CHARACTER:
-		return _handle_select_character(payload)
-	elif command == ProtocolMessages.CMD_ENTER_WORLD:
-		return _handle_enter_world(payload)
-	elif command == ProtocolMessages.CMD_MOVE:
-		return _handle_move(payload)
-	elif command == ProtocolMessages.CMD_ATTACK or command == ProtocolMessages.CMD_CAST_ABILITY:
-		return _handle_attack(payload)
-	elif command == ProtocolMessages.CMD_INTERACT:
-		return _handle_interact(payload)
-	elif command == ProtocolMessages.CMD_PICKUP_ITEM:
-		return _handle_pickup(payload)
-	elif command == ProtocolMessages.CMD_PING:
-		return [_event(ProtocolMessages.EVT_PONG, {})]
+	if int(envelope.get("version", 0)) != ProtocolMessages.VERSION:
+		return [_error(ProtocolMessages.ERR_PROTOCOL, ProtocolMessages.CODE_UNSUPPORTED_VERSION, "Unsupported protocol version.", request_id, sequence)]
 
-	return [_error(ProtocolMessages.ERR_INVALID_COMMAND, "Unknown command: '%s'." % command)]
+	if sequence <= _last_inbound_sequence:
+		return [_error(name, ProtocolMessages.CODE_INVALID_SEQUENCE, "Sequence is duplicate or stale.", request_id, sequence)]
+	_last_inbound_sequence = sequence
 
+	if name == ProtocolMessages.CMD_GAME_AUTHENTICATE:
+		return _handle_authenticate(payload, request_id, sequence)
+	elif name == ProtocolMessages.CMD_WORLD_ENTER:
+		return _handle_enter_world(request_id, sequence)
+	elif name == ProtocolMessages.CMD_MOVEMENT_MOVE:
+		return _handle_move(payload, request_id, sequence)
+	elif name == ProtocolMessages.CMD_SYSTEM_PING:
+		return [_event(ProtocolMessages.EVT_SYSTEM_PONG, {"serverTime": _now()}, request_id, sequence)]
 
-## Advances the simulated world and returns any resulting envelopes.
-func tick(delta: float) -> Array:
-	if not in_world:
-		return []
-
-	var out: Array = []
-
-	if _pending_respawn:
-		_respawn_timer -= delta
-		if _respawn_timer <= 0.0:
-			_pending_respawn = false
-			_respawn_player(out)
-		return out
-
-	_wander_creatures(delta, out)
-	_creatures_attack_player(delta, out)
-	return out
+	return [_error(ProtocolMessages.ERR_PROTOCOL, ProtocolMessages.CODE_UNKNOWN_MESSAGE, "Unknown message '%s'." % name, request_id, sequence)]
 
 
 # --- Command handlers ---------------------------------------------------------
 
-func _handle_authenticate(_payload: Dictionary) -> Array:
-	authenticated = true
-	return [_event(ProtocolMessages.EVT_AUTHENTICATED, {
-		"accountId": account_id,
+func _handle_authenticate(payload: Dictionary, request_id: String, sequence: int) -> Array:
+	if _state != STATE_CONNECTING:
+		return [_error(ProtocolMessages.ERR_GAME_AUTHENTICATE_REJECTED, ProtocolMessages.CODE_ALREADY_AUTHENTICATED, "Session is already authenticated.", request_id, sequence)]
+
+	var token := String(payload.get("gameToken", ""))
+	if token.strip_edges() == "":
+		return [_error(ProtocolMessages.ERR_GAME_AUTHENTICATE_REJECTED, ProtocolMessages.CODE_INVALID_PAYLOAD, "gameToken is required.", request_id, sequence)]
+
+	var character_id := selected_character_id
+	if character_id == "" and not characters.is_empty():
+		character_id = String(characters[0].get("characterId", ""))
+
+	_state = STATE_AUTHENTICATED
+	return [_event(ProtocolMessages.EVT_GAME_AUTHENTICATED, {
 		"sessionId": session_id,
-		"displayName": display_name,
-		"gameToken": "mock-game-token",
-	})]
-
-
-func _handle_create_character(payload: Dictionary) -> Array:
-	authenticated = true
-	var name := String(payload.get("name", "")).strip_edges()
-	var character_class := String(payload.get("characterClass", "Warrior"))
-	if name.length() < 2 or name.length() > 24:
-		return [_error("InvalidCommand", "Character name must be 2-24 characters.")]
-	for existing in characters:
-		if String(existing.get("name", "")).to_lower() == name.to_lower():
-			return [_error("InvalidCommand", "That character name is already taken.")]
-
-	characters.append({
-		"characterId": _new_id("char"),
 		"accountId": account_id,
-		"name": name,
-		"characterClass": character_class,
-		"level": 1,
-		"experience": 0,
-		"state": "Offline",
-	})
-	return [_event(ProtocolMessages.EVT_CHARACTER_LIST, {"characters": characters})]
+		"characterId": character_id,
+	}, request_id, sequence)]
 
 
-## HTTP-style helper mirroring the character-creation command.
-func api_create_character(name: String, character_class: String) -> Dictionary:
-	var envelopes := _handle_create_character({"name": name, "characterClass": character_class})
-	var first: Dictionary = envelopes[0] if not envelopes.is_empty() else {}
-	if String(first.get("type", "")) == ProtocolMessages.TYPE_ERROR:
-		var payload: Dictionary = first.get("payload", {})
-		return {"ok": false, "error": String(payload.get("message", "Unable to create character."))}
-	return {"ok": true, "error": "", "characters": characters.duplicate(true)}
+func _handle_enter_world(request_id: String, sequence: int) -> Array:
+	if _state == STATE_CONNECTING:
+		return [_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_NOT_AUTHENTICATED, "Session is not authenticated.", request_id, sequence)]
+	if _state == STATE_IN_WORLD:
+		return [_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_ALREADY_IN_WORLD, "Character is already in the world.", request_id, sequence)]
+
+	_state = STATE_IN_WORLD
+	_player_x = START_X
+	_player_y = START_Y
+	return [_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, {
+		"mapId": MAP_ID,
+		"width": MAP_WIDTH,
+		"height": MAP_HEIGHT,
+		"player": {
+			"characterId": selected_character_id,
+			"x": _player_x,
+			"y": _player_y,
+			"state": "InWorld",
+		},
+		"serverTime": _now(),
+	}, request_id, sequence)]
 
 
-func _handle_select_character(payload: Dictionary) -> Array:
-	authenticated = true
-	var character_id := String(payload.get("characterId", ""))
-	var character := _find_character(character_id)
-	if character.is_empty():
-		return [_error("CharacterNotFound", "Character not found.")]
-	selected_character_id = character_id
-	return [_event(ProtocolMessages.EVT_CHARACTER_SELECTED, {"character": character})]
+func _handle_move(payload: Dictionary, request_id: String, sequence: int) -> Array:
+	if _state != STATE_IN_WORLD:
+		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_NOT_IN_WORLD, "Character is not in the world.", request_id, sequence)]
 
+	if not payload.has("x") or not payload.has("y"):
+		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_INVALID_PAYLOAD, "Movement payload is invalid.", request_id, sequence)]
 
-func _handle_enter_world(_payload: Dictionary) -> Array:
-	if selected_character_id == "":
-		return [_error("CharacterNotFound", "No character selected.")]
+	var x := int(payload["x"])
+	var y := int(payload["y"])
 
-	var character := _find_character(selected_character_id)
-	if character.is_empty():
-		return [_error("CharacterNotFound", "Character not found.")]
+	if x < 0 or y < 0 or x >= MAP_WIDTH or y >= MAP_HEIGHT:
+		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_OUT_OF_BOUNDS, "Destination is outside the map.", request_id, sequence)]
 
-	_enter_world(character)
-	var events: Array = [_event(ProtocolMessages.EVT_WORLD_ENTERED, {
+	var distance := maxi(absi(x - _player_x), absi(y - _player_y))
+	if distance > MAX_MOVE_DISTANCE:
+		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_TOO_FAR, "Destination is too far.", request_id, sequence)]
+
+	_player_x = x
+	_player_y = y
+	return [_event(ProtocolMessages.EVT_MOVEMENT_ACCEPTED, {
 		"characterId": selected_character_id,
-	})]
-	events.append(_snapshot(_build_snapshot()))
-	return events
-
-
-func _handle_move(payload: Dictionary) -> Array:
-	if not in_world:
-		return [_error("CharacterNotInWorld", "Character is not in the world.")]
-
-	var target := Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
-	var origin := Vector2i(int(player.get("x", 0)), int(player.get("y", 0)))
-
-	if not _is_walkable(target.x, target.y):
-		return [_error(ProtocolMessages.ERR_TILE_BLOCKED, "That tile is blocked.")]
-	if _distance(origin, target) > MAX_MOVE_DISTANCE:
-		return [_error(ProtocolMessages.ERR_OUT_OF_RANGE, "That tile is too far away.")]
-
-	player["x"] = target.x
-	player["y"] = target.y
-	return [_event(ProtocolMessages.EVT_CHARACTER_MOVED, {
-		"entityId": selected_character_id,
-		"x": target.x,
-		"y": target.y,
-	})]
-
-
-func _handle_attack(payload: Dictionary) -> Array:
-	if not in_world:
-		return [_error("CharacterNotInWorld", "Character is not in the world.")]
-	if bool(player.get("dead", false)):
-		return [_error(ProtocolMessages.ERR_UNAUTHORIZED, "You are dead.")]
-
-	var target_id := String(payload.get("targetId", ""))
-	if not creatures.has(target_id):
-		return [_error(ProtocolMessages.ERR_INVALID_TARGET, "Target not found.")]
-
-	var creature: Dictionary = creatures[target_id]
-	var cpos := Vector2i(int(creature.get("x", 0)), int(creature.get("y", 0)))
-	var ppos := Vector2i(int(player.get("x", 0)), int(player.get("y", 0)))
-	if _distance(ppos, cpos) > 1:
-		return [_error(ProtocolMessages.ERR_OUT_OF_RANGE, "Target is out of range.")]
-
-	var out: Array = []
-	var damage: int = _rng.randi_range(6, 12)
-	creature["hp"] = maxi(0, int(creature.get("hp", 0)) - damage)
-	out.append(_event(ProtocolMessages.EVT_COMBAT_RESULT, {
-		"attackerId": selected_character_id,
-		"targetId": target_id,
-		"damage": damage,
-		"targetHp": creature["hp"],
-		"targetMaxHp": creature.get("maxHp", 0),
-	}))
-	out.append(_event(ProtocolMessages.EVT_DAMAGE_APPLIED, {
-		"targetId": target_id,
-		"amount": damage,
-		"remainingHp": creature["hp"],
-	}))
-
-	if int(creature["hp"]) <= 0:
-		_kill_creature(target_id, creature, out)
-
-	return out
-
-
-func _handle_interact(payload: Dictionary) -> Array:
-	var target_id := String(payload.get("targetId", ""))
-	var name := "something"
-	if creatures.has(target_id):
-		name = String(creatures[target_id].get("name", "creature"))
-	return [_event("Interaction", {
-		"targetId": target_id,
-		"message": "You study the %s." % name,
-	})]
-
-
-func _handle_pickup(payload: Dictionary) -> Array:
-	var item_id := String(payload.get("itemId", ""))
-	var item_name := String(payload.get("name", "Item"))
-	_add_to_inventory(item_id, item_name, 1)
-	return [
-		_event(ProtocolMessages.EVT_ITEM_PICKED_UP, {"itemId": item_id}),
-		_event("InventoryUpdated", {"inventory": inventory}),
-	]
-
-
-# --- World simulation ---------------------------------------------------------
-
-func _enter_world(character: Dictionary) -> void:
-	in_world = true
-	player = {
-		"id": selected_character_id,
-		"kind": "player",
-		"name": character.get("name", "Hero"),
-		"characterClass": character.get("characterClass", "Warrior"),
-		"x": PLAYER_SPAWN.x,
-		"y": PLAYER_SPAWN.y,
-		"hp": 100,
-		"maxHp": 100,
-		"level": int(character.get("level", 1)),
-		"experience": int(character.get("experience", 0)),
-		"experienceToNext": xp_to_next(int(character.get("level", 1))),
-		"gold": 0,
-		"dead": false,
-	}
-	inventory = []
-	creatures = {}
-	_spawn_creature(9, 5)
-	_spawn_creature(14, 8)
-	_spawn_creature(18, 11)
-
-
-func _spawn_creature(x: int, y: int) -> void:
-	var template: Dictionary = CREATURE_TEMPLATES[_rng.randi_range(0, CREATURE_TEMPLATES.size() - 1)]
-	var id := _new_id("creature")
-	creatures[id] = {
-		"id": id,
-		"kind": "creature",
-		"name": template["name"],
+		"mapId": MAP_ID,
 		"x": x,
 		"y": y,
-		"hp": template["hp"],
-		"maxHp": template["hp"],
+	}, request_id, sequence)]
+
+
+# --- Account / character helpers (offline) ------------------------------------
+
+func api_create_character(name: String, character_class: String) -> Dictionary:
+	var trimmed := name.strip_edges()
+	if trimmed.length() < 2 or trimmed.length() > 24:
+		return {"ok": false, "error": "Character name must be 2-24 characters."}
+	for existing in characters:
+		if String(existing.get("name", "")).to_lower() == trimmed.to_lower():
+			return {"ok": false, "error": "That character name is already taken."}
+
+	var character := {
+		"characterId": _new_guid(),
+		"accountId": account_id,
+		"name": trimmed,
+		"characterClass": character_class,
+		"state": "Offline",
 		"level": 1,
-		"xpReward": template["xp"],
-		"attack": template["attack"],
+		"experience": 0,
+		"mapId": MAP_ID,
+		"positionX": START_X,
+		"positionY": START_Y,
 	}
-
-
-func _kill_creature(target_id: String, creature: Dictionary, out: Array) -> void:
-	creatures.erase(target_id)
-	out.append(_event(ProtocolMessages.EVT_ENTITY_DEATH, {"entityId": target_id}))
-	out.append(_event(ProtocolMessages.EVT_CREATURE_DIED, {"entityId": target_id}))
-
-	var reward := int(creature.get("xpReward", 0))
-	player["experience"] = int(player.get("experience", 0)) + reward
-	out.append(_event(ProtocolMessages.EVT_EXPERIENCE_GAINED, {
-		"amount": reward,
-		"total": player["experience"],
-		"level": player.get("level", 1),
-	}))
-
-	var next := xp_to_next(int(player.get("level", 1)))
-	player["experienceToNext"] = next
-	while int(player["experience"]) >= next:
-		player["level"] = int(player.get("level", 1)) + 1
-		player["maxHp"] = int(player.get("maxHp", 100)) + 20
-		player["hp"] = player["maxHp"]
-		out.append(_event(ProtocolMessages.EVT_LEVEL_UP, {
-			"level": player["level"],
-			"experienceToNext": xp_to_next(int(player["level"])),
-		}))
-		next = xp_to_next(int(player["level"]))
-		player["experienceToNext"] = next
-
-	var loot := _roll_loot(creature)
-	if not loot.is_empty():
-		out.append(_event(ProtocolMessages.EVT_LOOT_RECEIVED, {"items": loot}))
-		for item in loot:
-			_add_to_inventory(String(item.get("itemId", "")), String(item.get("name", "Item")), int(item.get("quantity", 1)))
-		out.append(_event("InventoryUpdated", {"inventory": inventory}))
-
-
-func _roll_loot(_creature: Dictionary) -> Array:
-	var loot: Array = []
-	if _rng.randf() < 0.7:
-		loot.append({"itemId": "item.slime_gel", "name": "Slime Gel", "quantity": 1})
-	if _rng.randf() < 0.25:
-		loot.append({"itemId": "item.coin_pouch", "name": "Coin Pouch", "quantity": 1})
-	return loot
-
-
-func _wander_creatures(delta: float, out: Array) -> void:
-	_creature_timer += delta
-	if _creature_timer < _creature_interval:
-		return
-	_creature_timer = 0.0
-
-	for id in creatures.keys():
-		var creature: Dictionary = creatures[id]
-		if _rng.randf() > 0.5:
-			continue
-		var dx := _rng.randi_range(-1, 1)
-		var dy := _rng.randi_range(-1, 1)
-		var nx := int(creature.get("x", 0)) + dx
-		var ny := int(creature.get("y", 0)) + dy
-		if not _is_walkable(nx, ny):
-			continue
-		creature["x"] = nx
-		creature["y"] = ny
-		out.append(_event(ProtocolMessages.EVT_CREATURE_MOVED, {"entityId": id, "x": nx, "y": ny}))
-
-
-func _creatures_attack_player(delta: float, out: Array) -> void:
-	if bool(player.get("dead", false)):
-		return
-	for id in creatures.keys():
-		var creature: Dictionary = creatures[id]
-		var cpos := Vector2i(int(creature.get("x", 0)), int(creature.get("y", 0)))
-		var ppos := Vector2i(int(player.get("x", 0)), int(player.get("y", 0)))
-		if _distance(cpos, ppos) > 1:
-			continue
-		var cooldown := float(creature.get("attackCooldown", 0.0)) - delta
-		if cooldown > 0.0:
-			creature["attackCooldown"] = cooldown
-			continue
-		creature["attackCooldown"] = 2.0
-		var damage := int(creature.get("attack", 1)) + _rng.randi_range(0, 2)
-		player["hp"] = maxi(0, int(player.get("hp", 0)) - damage)
-		out.append(_event(ProtocolMessages.EVT_COMBAT_RESULT, {
-			"attackerId": id,
-			"targetId": selected_character_id,
-			"damage": damage,
-			"targetHp": player["hp"],
-			"targetMaxHp": player.get("maxHp", 100),
-		}))
-		if int(player["hp"]) <= 0:
-			_player_died(out)
-		return
-
-
-func _player_died(out: Array) -> void:
-	player["dead"] = true
-	player["hp"] = 0
-	_pending_respawn = true
-	_respawn_timer = 3.0
-	out.append(_event(ProtocolMessages.EVT_CHARACTER_DIED, {"characterId": selected_character_id}))
-
-
-func _respawn_player(out: Array) -> void:
-	player["dead"] = false
-	player["hp"] = int(player.get("maxHp", 100))
-	player["x"] = PLAYER_SPAWN.x
-	player["y"] = PLAYER_SPAWN.y
-	out.append(_event(ProtocolMessages.EVT_CHARACTER_RESPAWNED, {
-		"characterId": selected_character_id,
-		"x": PLAYER_SPAWN.x,
-		"y": PLAYER_SPAWN.y,
-		"hp": player["hp"],
-	}))
-
-
-# --- Payload builders ---------------------------------------------------------
-
-func _build_snapshot() -> Dictionary:
-	var entities: Array = []
-	for id in creatures.keys():
-		entities.append(_creature_view(creatures[id]))
-
-	return {
-		"map": {
-			"id": 1,
-			"name": "Town",
-			"width": MAP_WIDTH,
-			"height": MAP_HEIGHT,
-			"tileSize": TILE_SIZE,
-		},
-		"player": _player_view(),
-		"entities": entities,
-	}
-
-
-func _player_view() -> Dictionary:
-	return {
-		"id": selected_character_id,
-		"kind": "player",
-		"name": player.get("name", "Hero"),
-		"characterClass": player.get("characterClass", "Warrior"),
-		"x": player.get("x", 0),
-		"y": player.get("y", 0),
-		"hp": player.get("hp", 0),
-		"maxHp": player.get("maxHp", 0),
-		"level": player.get("level", 1),
-		"experience": player.get("experience", 0),
-		"experienceToNext": player.get("experienceToNext", 0),
-		"gold": player.get("gold", 0),
-		"inventory": inventory,
-	}
-
-
-func _creature_view(creature: Dictionary) -> Dictionary:
-	return {
-		"id": creature.get("id", ""),
-		"kind": "creature",
-		"name": creature.get("name", ""),
-		"x": creature.get("x", 0),
-		"y": creature.get("y", 0),
-		"hp": creature.get("hp", 0),
-		"maxHp": creature.get("maxHp", 0),
-		"level": creature.get("level", 1),
-	}
-
-
-# --- Helpers ------------------------------------------------------------------
-
-func xp_to_next(level: int) -> int:
-	var table := [0, 100, 250, 500, 900, 1500, 2300, 3400, 5000]
-	var index := clampi(level, 0, table.size() - 1)
-	return int(table[index])
-
-
-func map_size() -> Vector2i:
-	return Vector2i(MAP_WIDTH, MAP_HEIGHT)
-
-
-## Enables/disables idle creature wandering. Disable for deterministic runs.
-func set_wandering(enabled: bool) -> void:
-	_creature_interval = 0.9 if enabled else 100000.0
-
-
-func _find_character(character_id: String) -> Dictionary:
-	for character in characters:
-		if String(character.get("characterId", "")) == character_id:
-			return character
-	return {}
+	characters.append(character)
+	return {"ok": true, "error": "", "character": character}
 
 
 func _seed_characters() -> void:
 	characters = [{
-		"characterId": _new_id("char"),
+		"characterId": _new_guid(),
 		"accountId": account_id,
 		"name": "Aria",
 		"characterClass": "Warrior",
+		"state": "Offline",
 		"level": 1,
 		"experience": 0,
-		"state": "Offline",
+		"mapId": MAP_ID,
+		"positionX": START_X,
+		"positionY": START_Y,
 	}]
 
 
-func _add_to_inventory(item_id: String, name: String, quantity: int) -> void:
-	for entry in inventory:
-		if String(entry.get("itemId", "")) == item_id:
-			entry["quantity"] = int(entry.get("quantity", 0)) + quantity
-			return
-	inventory.append({"itemId": item_id, "name": name, "quantity": quantity})
+# --- Envelope builders --------------------------------------------------------
+
+func _event(name: String, payload: Dictionary, request_id: String, _sequence: int) -> Dictionary:
+	return _envelope(ProtocolMessages.TYPE_EVENT, name, payload, request_id)
 
 
-func _is_walkable(x: int, y: int) -> bool:
-	if x <= 0 or y <= 0 or x >= MAP_WIDTH - 1 or y >= MAP_HEIGHT - 1:
-		return false
-	return true
+func _error(name: String, code: String, message: String, request_id: String, _sequence: int) -> Dictionary:
+	return _envelope(ProtocolMessages.TYPE_ERROR, name, {"code": code, "message": message}, request_id)
 
 
-func _distance(a: Vector2i, b: Vector2i) -> int:
-	return absi(a.x - b.x) + absi(a.y - b.y)
-
-
-func _new_id(prefix: String) -> String:
-	_id_counter += 1
-	return "%s-%04d" % [prefix, _id_counter]
-
-
-func _next_sequence() -> int:
-	server_sequence += 1
-	return server_sequence
-
-
-func _event(name: String, payload: Dictionary) -> Dictionary:
+func _envelope(type: String, name: String, payload: Dictionary, request_id: String) -> Dictionary:
+	_outbound_sequence += 1
 	return {
 		"version": ProtocolMessages.VERSION,
-		"type": ProtocolMessages.TYPE_EVENT,
+		"type": type,
 		"name": name,
-		"requestId": "",
-		"sequence": _next_sequence(),
+		"requestId": request_id if request_id != "" else null,
+		"sequence": _outbound_sequence,
 		"payload": payload,
 	}
 
 
-func _snapshot(payload: Dictionary) -> Dictionary:
-	return {
-		"version": ProtocolMessages.VERSION,
-		"type": ProtocolMessages.TYPE_SNAPSHOT,
-		"name": ProtocolMessages.EVT_WORLD_SNAPSHOT,
-		"requestId": "",
-		"sequence": _next_sequence(),
-		"payload": payload,
-	}
+func _new_guid() -> String:
+	var bytes := PackedByteArray()
+	bytes.resize(16)
+	for i in range(16):
+		bytes[i] = _rng.randi() & 0xFF
+	bytes[6] = (bytes[6] & 0x0F) | 0x40
+	bytes[8] = (bytes[8] & 0x3F) | 0x80
+	var hex := ""
+	for i in range(16):
+		hex += "%02x" % bytes[i]
+	return "%s-%s-%s-%s-%s" % [hex.substr(0, 8), hex.substr(8, 4), hex.substr(12, 4), hex.substr(16, 4), hex.substr(20, 12)]
 
 
-func _error(code: String, message: String) -> Dictionary:
-	return {
-		"version": ProtocolMessages.VERSION,
-		"type": ProtocolMessages.TYPE_ERROR,
-		"name": ProtocolMessages.EVT_ERROR,
-		"requestId": "",
-		"sequence": _next_sequence(),
-		"payload": {"code": code, "message": message},
-	}
+func _now() -> String:
+	return Time.get_datetime_string_from_system(true) + "Z"

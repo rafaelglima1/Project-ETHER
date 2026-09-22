@@ -13,6 +13,7 @@ signal entity_removed(id: String)
 signal player_updated
 
 var map: Dictionary = {}
+var map_id := 0
 var player_id := ""
 var player: Dictionary = {}
 var entities: Dictionary = {}
@@ -20,6 +21,7 @@ var entities: Dictionary = {}
 
 func clear() -> void:
 	map = {}
+	map_id = 0
 	player_id = ""
 	player = {}
 	entities = {}
@@ -28,6 +30,7 @@ func clear() -> void:
 func apply_snapshot(payload: Dictionary) -> void:
 	var snapshot := SnapshotProcessor.process(payload)
 	map = snapshot.get("map", {})
+	map_id = int(map.get("id", 0))
 	entities = {}
 
 	var player_data: Dictionary = snapshot.get("player", {})
@@ -45,6 +48,7 @@ func apply_delta(payload: Dictionary) -> void:
 
 	if delta.has("map"):
 		map = delta["map"]
+		map_id = int(map.get("id", map_id))
 
 	if delta.has("player"):
 		_update_player(delta["player"])
@@ -65,6 +69,26 @@ func remove_entity(id: String) -> void:
 
 func get_entity(id: String) -> Dictionary:
 	return entities.get(id, {})
+
+
+## Applies a `movement.accepted` payload. Rejects updates for a different
+## character or map (the server is authoritative; the client never guesses).
+## Returns { applied: bool, reason: String }.
+func apply_movement(payload: Dictionary) -> Dictionary:
+	var character_id := String(payload.get("characterId", ""))
+	var map_id := int(payload.get("mapId", -1))
+
+	if character_id == "" or character_id != player_id:
+		return {"applied": false, "reason": "character_mismatch"}
+	if map_id != self.map_id:
+		return {"applied": false, "reason": "map_mismatch"}
+
+	_upsert_entity({
+		"id": character_id,
+		"x": int(payload.get("x", 0)),
+		"y": int(payload.get("y", 0)),
+	})
+	return {"applied": true, "reason": ""}
 
 
 func has_entity(id: String) -> bool:

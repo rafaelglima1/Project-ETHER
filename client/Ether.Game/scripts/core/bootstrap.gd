@@ -9,6 +9,7 @@ extends Control
 const LOGIN_SCENE := preload("res://scenes/auth/login.tscn")
 const CHARACTER_SCENE := preload("res://scenes/character/character_select.tscn")
 const WORLD_SCENE := preload("res://scenes/world/world.tscn")
+const DEBUG_OVERLAY_SCENE := preload("res://scenes/ui/debug_overlay.tscn")
 
 var game: Node = null
 var _current: Node = null
@@ -23,6 +24,7 @@ func _ready() -> void:
 
 	game.authenticated.connect(_on_authenticated)
 	game.world_entered.connect(_on_world_entered)
+	add_child(DEBUG_OVERLAY_SCENE.instantiate())
 	game.start()
 	_show_login()
 

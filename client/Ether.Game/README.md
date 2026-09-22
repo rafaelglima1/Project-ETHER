@@ -2,12 +2,35 @@
 
 Mobile-first 2D MMORPG client for Project Ether. Godot 4.x, **GDScript**
 (Blueprint v5.0 §2/§49). The client is *presentation + intent only* — every
-authoritative value (HP, XP, gold, damage, loot, movement outcome, death) comes
-from the server (Blueprint v5.0 §89).
+authoritative value (identity, position, world state) comes from the backend.
 
-This is the foundation for the **First Playable** track. It boots and runs the
-complete loop offline against a mock backend, and the same gameplay/UI layers run
-unchanged against the real GameServer over WebSocket.
+**Current milestone: M4 — real GameServer integration.** The client implements
+the canonical realtime protocol (ADR-0003) and runs the full flow against the
+real backend over HTTPS/WSS, while keeping an offline mock for development/CI.
+
+---
+
+## The M4 flow
+
+```
+Godot
+  │  POST /auth/login                  (email, password)
+  │  GET  /accounts/{id}/characters
+  │  POST /characters/{id}/game-token
+  ▼
+gameToken
+  │  WSS  <game-host>/game
+  │  ──▶ game.authenticate  { gameToken }
+  │  ◀── game.authenticated  { sessionId, accountId, characterId }
+  │  ──▶ world.enter         {}
+  │  ◀── world.snapshot      { mapId, width, height, player { characterId, x, y, state }, serverTime }
+  │  ──▶ movement.move       { x, y }
+  │  ◀── movement.accepted   { characterId, mapId, x, y }
+```
+
+The client never moves itself ahead of `movement.accepted`, never adopts a
+character the server did not authenticate, and never sends combat commands
+(M4 has no M5 combat).
 
 ---
 
@@ -16,45 +39,33 @@ unchanged against the real GameServer over WebSocket.
 Requires Godot **4.x** (validated with 4.7.2).
 
 ```bash
-# Open the project
+# Offline (mock) — default
 godot --path client/Ether.Game
 
-# Headless boot smoke (no window)
-godot --headless --path client/Ether.Game --quit-after 180
+# Real backend
+ETHER_CLIENT_MODE=real \
+ETHER_CLIENT_PROFILE=remote \
+ETHER_CLIENT_API_URL=https://<api-host> \
+ETHER_CLIENT_WS_URL=wss://<game-host>/game \
+godot --path client/Ether.Game
 ```
 
-Press **Enter World** on the login screen: the mock path signs in, lists a
-character, enters the world, and lets you move by tapping the ground, tapping a
-creature to target, and pressing **Attack**.
+### Configuration (centralized in `scripts/core/client_config.gd`)
+
+| Env var | Values | Default |
+| --- | --- | --- |
+| `ETHER_CLIENT_MODE` | `mock` \| `real` | `mock` |
+| `ETHER_CLIENT_PROFILE` | `local` \| `remote` | `local` |
+| `ETHER_CLIENT_API_URL` | e.g. `https://api.example` | local preset |
+| `ETHER_CLIENT_WS_URL` | e.g. `wss://game.example/game` | local preset |
+
+`PROFILE=local` presets developer endpoints; `remote` requires explicit URLs
+(no domain is hardcoded). `ETHER_CLIENT_DEBUG=1` shows the diagnostics overlay
+(toggle any time with **F3**). Secrets are never logged or shown.
 
 ### Desktop development input
-- Left mouse click = tap-to-move / tap target.
-- Right mouse click = clear target.
-- `WASD` / arrow keys = one-tile steps (development convenience only; mobile is
-  the primary target).
-
-### Automated smoke (`ETHER_AUTOPLAY`)
-Set `ETHER_AUTOPLAY=1` to drive login → character → world → combat without input
-(used for headless validation):
-
-```bash
-ETHER_AUTOPLAY=1 godot --headless --path client/Ether.Game --fixed-fps 60 --quit-after 1200
-```
-
----
-
-## Tests
-
-Zero-dependency suite (no addons). Runs headless and exits non-zero on failure:
-
-```bash
-godot --headless --path client/Ether.Game --script res://tests/test_runner.gd
-```
-
-Covers: envelope encode/decode incl. hostile input, connection state machine,
-heartbeat, reconnect backoff, mock transport round trips, snapshot/delta
-application, and the full mock playable flow (connect → auth → character →
-world → move → attack → XP → loot → inventory → disconnect → reconnect).
+- Left click / tap = move (tap-to-move); tap a tile to send `movement.move`.
+- `WASD` / arrows = one-tile steps (development convenience; mobile-first).
 
 ---
 
@@ -68,131 +79,110 @@ CommandSender ◄──────────── NetworkClient ────
                                                           │
                                        ClientState / WorldState (mirrors)
                                                           │
-                                                    Scenes + HUD
+                                                    Scenes + HUD + DebugOverlay
 ```
 
 ```
 client/Ether.Game/
   project.godot                 main scene = scenes/bootstrap/bootstrap.tscn
-  scenes/                       bootstrap, auth, character, world, ui
+  scenes/  bootstrap, auth, character, world, ui
   scripts/
-    core/       client_config, app_state, game_client (autoload), bootstrap
-    network/    transport, mock_transport, websocket_transport,
-                protocol_serializer, protocol_messages, command_sender,
-                event_dispatcher, heartbeat_manager, reconnect_manager,
-                network_client, api_client, mock_api_client,
-                http_api_client, mock_backend
-    state/      client_state, world_state, snapshot_processor, delta_processor
-    world/      world_scene
-    entities/   entity_view, player, creature
-    combat/     combat_controller
-    input/      input_controller
-    camera/     camera_controller
-    ui/         login_screen, character_select_screen, hud
-  tests/        test_runner + suites
+    core/      client_config, app_state, game_client (autoload), bootstrap
+    network/   transport, mock_transport, websocket_transport, protocol_messages,
+               protocol_serializer, protocol_errors, command_sender,
+               event_dispatcher, heartbeat_manager, reconnect_manager,
+               network_client, api_client, mock_api_client, http_api_client,
+               mock_backend
+    state/     client_state, world_state, snapshot_processor, delta_processor
+    world/     world_scene
+    entities/  entity_view, player, creature
+    combat/    combat_controller        (intent only; inert in M4)
+    input/     input_controller
+    camera/    camera_controller
+    ui/        login_screen, character_select_screen, hud, debug_overlay
+  tests/       test_runner + suites + real_e2e harness
 ```
 
-### State machine
+### Session state machine
 `Disconnected → Connecting → Connected → Authenticated → InWorld`, plus
-`Reconnecting`. Invalid transitions are refused (`scripts/core/app_state.gd`).
+`Reconnecting`. Illegal transitions are refused (`scripts/core/app_state.gd`).
+
+### Protocol (canonical, `scripts/network/protocol_messages.gd`)
+- Envelope: `{ version, type, name, requestId, sequence, payload }`, camelCase.
+- Commands: `game.authenticate`, `world.enter`, `movement.move`, `system.ping`.
+- Events: `game.authenticated`, `world.snapshot`, `movement.accepted`, `system.pong`.
+- Errors: `protocol.error`, `movement.rejected`, `world.enter.rejected`,
+  `game.authenticate.rejected` with deterministic `code`/`message`.
+
+`sequence` is a single monotonic per-session counter (`CommandSender`); each
+command gets a fresh GUID `requestId` (the server deserializes it as `Guid?`).
+`ProtocolErrors.user_message()` maps codes to non-technical UI text.
 
 ### Server authority
-The client updates its mirrors **only** from server payloads:
-- `WorldSnapshot` / `WorldDelta` → `WorldState`
-- `CharacterMoved` / `CreatureMoved` / `EntityDeath` / `CombatResult` /
-  `ExperienceGained` / `LevelUp` / `LootReceived` → applied to `WorldState` /
-  `ClientState`, then re-emitted as UI signals.
-
-`CombatController` only *requests* attacks. No damage, XP, loot or ownership is
-computed client-side. XP progress is rendered from a server-provided
-`experienceToNext`, never from a client-side curve.
+`WorldState` is written only from server payloads. `world.snapshot` sets the
+authoritative position; `movement.accepted` updates it; movement for a different
+character/map is ignored. Reconnect simply rebuilds the session
+(`game.authenticate → world.enter → world.snapshot`) — no fake grace period.
 
 ### Mock ↔ real seam
-`ClientConfig.mode` selects the transport/API pair in
-`scripts/core/game_client.gd`:
+`ClientConfig.mode` selects the transport/API pair in `game_client.gd`:
 
-| mode        | transport            | API                   |
-| ----------- | -------------------- | --------------------- |
-| `MOCK`      | `MockTransport`      | `MockApiClient`       |
-| `WEBSOCKET` | `WebSocketTransport` | `HttpApiClient`       |
+| mode | transport | API |
+| --- | --- | --- |
+| `MOCK` | `MockTransport` (`MockBackend`) | `MockApiClient` |
+| `REAL` | `WebSocketTransport` | `HttpApiClient` |
 
-Nothing above the transport layer changes when switching. `MockBackend` plays the
-*server* role (it computes damage/XP/loot precisely so the client doesn't have
-to). Environment overrides: `ETHER_CLIENT_MODE`, `ETHER_CLIENT_API_URL`,
-`ETHER_CLIENT_WS_URL`.
+`MockBackend` implements the identical canonical contract, so the flow above is
+exercised offline with no code changes above the transport layer.
 
 ---
 
-## Wire envelope (client interpretation)
+## Tests
 
-Blueprint v5.0 §13/§15 show a command with a top-level `type` carrying the
-command name; §35 defines the envelope `type` as the *category*
-(`command|event|snapshot|delta|error`). The client treats **§35 as
-authoritative** (later section wins) and adds a `name` field for the concrete
-command/event:
+Zero-dependency suites; run headless (exits non-zero on failure):
 
-```json
-{ "version": 1, "type": "command", "name": "Move",
-  "requestId": "uuid", "sequence": 154, "payload": { "x": 105, "y": 87 } }
+```bash
+godot --headless --path client/Ether.Game --script res://tests/test_runner.gd
 ```
 
-The client tolerates servers that place the concrete name in `type` and omit
-`name` (§13 shape) — `MockBackend` accepts both, and `EventDispatcher` /
-`SnapshotProcessor` / `DeltaProcessor` normalize both. Commands carry a monotonic
-per-session `sequence`.
+Covers: canonical envelope + hostile input + GUID requestId + sequence,
+state machine, heartbeat, reconnect backoff, mock transport round trips
+(authenticate/snapshot/movement/ping/rejections/invalid sequence), canonical
+snapshot & movement acceptance/rejection, and the full mock playable flow
+including reconnect.
 
----
+### Real end-to-end (against the deployed backend)
 
-## Backend contract requests
-
-> **BACKEND_CONTRACT_REQUEST**
-
-```text
-AGENT_ID: OPENCODE-2
-ROLE: GODOT-CLIENT
-
-REQUEST:
-Confirm the canonical gameplay envelope and the auth/character HTTP surface.
-
-REASON:
-Blueprint v5.0 §13/§15 and §35 describe the envelope differently, and the M1
-backend currently exposes an unauthenticated /accounts/*/*characters surface
-that differs from Blueprint §47/§48 (/auth/login, /characters, ...). The client
-cannot pin its DTOs until the contract is finalized.
-
-EXPECTED_CONTRACT:
-1) Envelope: { version, type(category), name(concrete), requestId, sequence,
-   payload } — or an explicit alternative.
-2) HTTP: POST /auth/register, POST /auth/login, POST /auth/refresh,
-   GET /characters, POST /characters, POST /characters/{id}/select.
-3) GameServer WebSocket path (default /game) and that the client Authenticate
-   command carries the GameToken.
-
-AFFECTED_CLIENT_AREA:
-scripts/network/protocol_serializer.gd, protocol_messages.gd,
-scripts/network/http_api_client.gd (endpoint constants), scripts/network/mock_backend.gd
+```bash
+ETHER_CLIENT_MODE=real ETHER_CLIENT_PROFILE=remote \
+ETHER_CLIENT_API_URL=https://<api-host> ETHER_CLIENT_WS_URL=wss://<game-host>/game \
+ETHER_E2E_EMAIL=hero@example.com ETHER_E2E_PASSWORD=... \
+godot --headless --path client/Ether.Game --script res://tests/real_e2e.gd
 ```
 
-No backend files were modified. `BACKEND_CHANGE_REQUIRED: NONE`.
+Prints `1/8 … 8/8` step evidence and `REAL_E2E: PASS`. It never starts a local
+backend; if the Oracle endpoint is unreachable it exits `2` (BLOCKED).
 
 ---
 
-## Open decisions (not silently decided)
+## Backend findings
 
-- `PRODUCT_DECISION_REQUIRED` — client orientation. Landscape is used as a
-  reversible default; the blueprint does not fix it.
-- `PRODUCT_DECISION_REQUIRED` — final reconnect policy (grace/backoff). The
-  client implements infrastructure only (`ReconnectManager`), no policy claims.
+None required a client-side workaround; the client was adapted to the canonical
+contract. Two contract clarifications were resolved by the backend M4 (ADR-0003)
+and are now implemented exactly:
+
+- Envelope uses `type` = category plus a semantic `name` (former §13/§35 ambiguity).
+- Auth/character/game-token HTTP surface (`/auth/*`, `/accounts/*/characters`,
+  `/characters/{id}/game-token`).
+
+`BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched.
 
 ---
 
-## Validation status (validated with Godot 4.7.2 headless)
+## Scope (M4)
 
-| Check | Result |
-| --- | --- |
-| Project imports / all scripts parse | ✅ PASS |
-| Headless boot, mock connect | ✅ PASS |
-| Unit + integration tests | ✅ 41/41 PASS |
-| Full mock playable (login→world→combat→XP→loot→inventory→reconnect) | ✅ PASS (`ETHER_AUTOPLAY`) |
-| Android export | ⛔ `ANDROID_BUILD_UNVERIFIED` (no Android SDK/export templates in the dev environment) |
-| On-device rendering / touch gestures | ⛔ not verifiable headless |
+Implemented: authentication, characters, game token, real WebSocket,
+world enter, snapshot, movement (server-authoritative), heartbeat, reconnect,
+plus the retained offline mock. **Not implemented** (out of scope): combat,
+creatures, AI, XP, loot, inventory, quests, NPCs, chat, guild, party, PvP,
+market, crafting, monetization. The HUD/attack affordance is inert by design.

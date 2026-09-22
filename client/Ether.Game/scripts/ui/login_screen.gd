@@ -4,7 +4,7 @@ extends Control
 ## bootstrap switches screens when authentication succeeds.
 
 var game: Node = null
-var _username: LineEdit
+var _email: LineEdit
 var _password: LineEdit
 var _login_button: Button
 var _register_button: Button
@@ -35,7 +35,7 @@ func _build() -> void:
 	center.add_child(panel)
 
 	var column := VBoxContainer.new()
-	column.custom_minimum_size = Vector2(320, 0)
+	column.custom_minimum_size = Vector2(340, 0)
 	column.add_theme_constant_override("separation", 10)
 	panel.add_child(column)
 
@@ -46,14 +46,14 @@ func _build() -> void:
 	column.add_child(title)
 
 	var subtitle := Label.new()
-	subtitle.text = "Tap to begin your journey"
+	subtitle.text = "Sign in to enter the world"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(subtitle)
 
-	_username = LineEdit.new()
-	_username.placeholder_text = "Account name"
-	_username.text = "Adventurer"
-	column.add_child(_username)
+	_email = LineEdit.new()
+	_email.placeholder_text = "Email"
+	_email.text = "hero@example.com"
+	column.add_child(_email)
 
 	_password = LineEdit.new()
 	_password.placeholder_text = "Password"
@@ -78,13 +78,19 @@ func _build() -> void:
 
 
 func _on_login() -> void:
+	if _email.text.strip_edges() == "":
+		_status.text = "Enter an email address."
+		return
 	_set_busy(true, "Signing in...")
-	game.request_login(_username.text, _password.text)
+	game.request_login(_email.text.strip_edges(), _password.text)
 
 
 func _on_register() -> void:
+	if _email.text.strip_edges() == "":
+		_status.text = "Enter an email address."
+		return
 	_set_busy(true, "Creating account...")
-	game.request_register(_username.text, _password.text)
+	game.request_register(_email.text.strip_edges(), _password.text)
 
 
 func _on_authenticated(display_name: String) -> void:

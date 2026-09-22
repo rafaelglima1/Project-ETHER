@@ -1,78 +1,58 @@
 class_name ProtocolMessages
 extends RefCounted
 
-## Canonical message names and envelope types.
+## Canonical realtime protocol (ADR-0003) — mirrors the backend contract exactly.
 ##
-## Two sources in Blueprint v5.0 describe the wire format:
-##   §13/§15 show a command with a top-level `type` carrying the command name.
-##   §35 defines the envelope `type` as the *category* (command/event/snapshot/
-##   delta/error).
-##
-## The client treats §35 as authoritative (later section wins) and additionally
-## carries a `name` field for the concrete command/event. This is a documented
-## client-side interpretation — see BACKEND_CONTRACT_REQUEST in the client
-## README. Processors tolerate both shapes so the real server can decide.
+## Envelope:
+##   { version, type, name, requestId, sequence, payload }
+## where type is one of command | event | error, and name is the semantic
+## message (e.g. "movement.move"). JSON uses camelCase.
 
 const VERSION := 1
 
-# Envelope categories (Blueprint v5.0 §35)
 const TYPE_COMMAND := "command"
 const TYPE_EVENT := "event"
-const TYPE_SNAPSHOT := "snapshot"
-const TYPE_DELTA := "delta"
 const TYPE_ERROR := "error"
 
-const KNOWN_TYPES := [TYPE_COMMAND, TYPE_EVENT, TYPE_SNAPSHOT, TYPE_DELTA, TYPE_ERROR]
+const KNOWN_TYPES := [TYPE_COMMAND, TYPE_EVENT, TYPE_ERROR]
 
-# Client -> Server commands (Blueprint v5.0 §15)
-const CMD_AUTHENTICATE := "Authenticate"
-const CMD_CREATE_CHARACTER := "CreateCharacter"
-const CMD_SELECT_CHARACTER := "SelectCharacter"
-const CMD_ENTER_WORLD := "EnterWorld"
-const CMD_MOVE := "Move"
-const CMD_ATTACK := "Attack"
-const CMD_CAST_ABILITY := "CastAbility"
-const CMD_INTERACT := "Interact"
-const CMD_PICKUP_ITEM := "PickupItem"
-const CMD_PING := "Ping"
+# --- Client -> Server commands ---
+const CMD_GAME_AUTHENTICATE := "game.authenticate"
+const CMD_WORLD_ENTER := "world.enter"
+const CMD_MOVEMENT_MOVE := "movement.move"
+const CMD_SYSTEM_PING := "system.ping"
 
-# Server -> Client events (Blueprint v5.0 §36 + client contract list)
-const EVT_CONNECTED := "Connected"
-const EVT_AUTHENTICATED := "Authenticated"
-const EVT_CHARACTER_LIST := "CharacterList"
-const EVT_CHARACTER_SELECTED := "CharacterSelected"
-const EVT_WORLD_ENTERED := "WorldEntered"
-const EVT_CHARACTER_MOVED := "CharacterMoved"
-const EVT_CREATURE_SPAWNED := "CreatureSpawned"
-const EVT_CREATURE_MOVED := "CreatureMoved"
-const EVT_ENTITY_SPAWN := "EntitySpawn"
-const EVT_ENTITY_UPDATE := "EntityUpdate"
-const EVT_ENTITY_DESPAWN := "EntityDespawn"
-const EVT_COMBAT_STARTED := "CombatStarted"
-const EVT_DAMAGE_APPLIED := "DamageApplied"
-const EVT_COMBAT_RESULT := "CombatResult"
-const EVT_CREATURE_DIED := "CreatureDied"
-const EVT_ENTITY_DEATH := "EntityDeath"
-const EVT_LOOT_DROPPED := "LootDropped"
-const EVT_LOOT_RECEIVED := "LootReceived"
-const EVT_ITEM_PICKED_UP := "ItemPickedUp"
-const EVT_EXPERIENCE_GAINED := "ExperienceGained"
-const EVT_LEVEL_UP := "LevelUp"
-const EVT_CHARACTER_DIED := "CharacterDied"
-const EVT_CHARACTER_RESPAWNED := "CharacterRespawned"
-const EVT_WORLD_SNAPSHOT := "WorldSnapshot"
-const EVT_WORLD_DELTA := "WorldDelta"
-const EVT_MOVEMENT_ACCEPTED := "MovementAccepted"
-const EVT_PONG := "Pong"
-const EVT_ERROR := "Error"
+# --- Server -> Client events ---
+const EVT_GAME_AUTHENTICATED := "game.authenticated"
+const EVT_WORLD_SNAPSHOT := "world.snapshot"
+const EVT_MOVEMENT_ACCEPTED := "movement.accepted"
+const EVT_SYSTEM_PONG := "system.pong"
 
-# Error codes kept client-side for display only (Blueprint v5.0 §37).
-const ERR_UNAUTHORIZED := "Unauthorized"
-const ERR_INVALID_COMMAND := "InvalidCommand"
-const ERR_INVALID_SEQUENCE := "InvalidSequence"
-const ERR_INVALID_POSITION := "InvalidPosition"
-const ERR_TILE_BLOCKED := "TileBlocked"
-const ERR_OUT_OF_RANGE := "OutOfRange"
-const ERR_COOLDOWN_ACTIVE := "CooldownActive"
-const ERR_INVALID_TARGET := "InvalidTarget"
-const ERR_INTERNAL_ERROR := "InternalError"
+# --- Server -> Client error message names ---
+const ERR_PROTOCOL := "protocol.error"
+const ERR_MOVEMENT_REJECTED := "movement.rejected"
+const ERR_WORLD_ENTER_REJECTED := "world.enter.rejected"
+const ERR_GAME_AUTHENTICATE_REJECTED := "game.authenticate.rejected"
+
+# --- Deterministic error codes (ProtocolErrorCodes on the server) ---
+const CODE_INVALID_ENVELOPE := "INVALID_ENVELOPE"
+const CODE_UNSUPPORTED_VERSION := "UNSUPPORTED_VERSION"
+const CODE_UNKNOWN_MESSAGE := "UNKNOWN_MESSAGE"
+const CODE_INVALID_PAYLOAD := "INVALID_PAYLOAD"
+const CODE_MESSAGE_TOO_LARGE := "MESSAGE_TOO_LARGE"
+const CODE_NOT_AUTHENTICATED := "NOT_AUTHENTICATED"
+const CODE_ALREADY_AUTHENTICATED := "ALREADY_AUTHENTICATED"
+const CODE_INVALID_TOKEN := "INVALID_TOKEN"
+const CODE_TOKEN_EXPIRED := "TOKEN_EXPIRED"
+const CODE_WRONG_TOKEN_PURPOSE := "WRONG_TOKEN_PURPOSE"
+const CODE_NOT_AUTHORIZED := "NOT_AUTHORIZED"
+const CODE_NOT_IN_WORLD := "NOT_IN_WORLD"
+const CODE_ALREADY_IN_WORLD := "ALREADY_IN_WORLD"
+const CODE_INVALID_MAP := "INVALID_MAP"
+const CODE_OUT_OF_BOUNDS := "OUT_OF_BOUNDS"
+const CODE_TOO_FAR := "TOO_FAR"
+const CODE_INVALID_STATE := "INVALID_STATE"
+const CODE_INVALID_SEQUENCE := "INVALID_SEQUENCE"
+const CODE_RATE_LIMITED := "RATE_LIMITED"
+const CODE_SERVER_BUSY := "SERVER_BUSY"
+const CODE_INTERNAL_ERROR := "INTERNAL_ERROR"

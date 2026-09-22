@@ -1,6 +1,8 @@
 extends Control
 
 ## Character list / selection / creation screen.
+## Selecting a character requests its game token; the bootstrap switches to the
+## world once the server snapshot arrives.
 
 const CLASS_OPTIONS := ["Warrior", "Ranger", "Arcanist"]
 
@@ -17,8 +19,8 @@ func _ready() -> void:
 	_build()
 	if game != null:
 		game.characters_changed.connect(_on_characters_changed)
-		game.character_selected.connect(_on_character_selected)
 		game.error_received.connect(_on_error)
+		game.log_message.connect(_on_log)
 		game.request_characters()
 
 
@@ -49,8 +51,7 @@ func _build() -> void:
 	_list.add_theme_constant_override("separation", 8)
 	column.add_child(_list)
 
-	var divider := HSeparator.new()
-	column.add_child(divider)
+	column.add_child(HSeparator.new())
 
 	var create_row := HBoxContainer.new()
 	create_row.add_theme_constant_override("separation", 8)
@@ -113,9 +114,9 @@ func _on_create() -> void:
 	game.request_create_character(name, _class_option.get_item_text(_class_option.selected))
 
 
-func _on_character_selected(character: Dictionary) -> void:
-	_status.text = "Selected %s" % String(character.get("name", "character"))
-
-
 func _on_error(_code: String, message: String) -> void:
 	_status.text = message
+
+
+func _on_log(text: String) -> void:
+	_status.text = text

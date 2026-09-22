@@ -46,12 +46,6 @@ func _ready() -> void:
 	world_state.snapshot_applied.connect(_on_snapshot_applied)
 	combat.target_changed.connect(_on_target_changed)
 
-	if game != null:
-		if game.has_signal("damage_dealt"):
-			game.damage_dealt.connect(_on_damage_dealt)
-		if game.has_signal("creature_defeated"):
-			game.creature_defeated.connect(_on_creature_defeated)
-
 	_sync_all()
 	_refresh_camera()
 	queue_redraw()
@@ -172,36 +166,6 @@ func _request_attack(target_id: String) -> void:
 
 func _is_adjacent(a: Vector2i, b: Vector2i) -> bool:
 	return absi(a.x - b.x) + absi(a.y - b.y) <= 1
-
-
-# --- Feedback -----------------------------------------------------------------
-
-func _on_damage_dealt(target_id: String, amount: int, _hp: int, _max_hp: int) -> void:
-	if not world_state.has_entity(target_id):
-		return
-	var color := Color(1.0, 0.5, 0.4)
-	if target_id == world_state.player_id:
-		color = Color(1.0, 0.3, 0.3)
-	show_floating_text("-%d" % amount, world_state.entity_position(target_id), color)
-
-
-func _on_creature_defeated(target_id: String) -> void:
-	if not world_state.has_entity(target_id):
-		return
-	show_floating_text("Defeated!", world_state.entity_position(target_id), Color(1.0, 0.9, 0.4))
-
-
-func show_floating_text(text: String, tile: Vector2i, color: Color = Color.WHITE) -> void:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_color_override("font_color", color)
-	label.add_theme_font_size_override("font_size", 16)
-	label.position = Vector2(tile.x * tile_size, tile.y * tile_size - 8)
-	add_child(label)
-	var tween := create_tween()
-	tween.tween_property(label, "position:y", label.position.y - 28.0, 0.7)
-	tween.parallel().tween_property(label, "modulate:a", 0.0, 0.7)
-	tween.tween_callback(label.queue_free)
 
 
 # --- Rendering ----------------------------------------------------------------

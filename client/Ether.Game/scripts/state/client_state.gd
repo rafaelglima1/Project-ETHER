@@ -3,15 +3,17 @@ extends RefCounted
 
 ## Non-authoritative client-side session data.
 ##
-## Holds the account/session tokens, the character list and an inventory
-## *mirror*. Nothing here decides a gameplay outcome — it only stores what the
-## server (mock or real) already decided, for the UI to render.
+## Holds identity/session tokens and the character list mirror. Nothing here
+## decides a gameplay outcome — it only stores what the backend already decided,
+## for the UI to render. Tokens are never logged or shown in the UI.
 
 var account_id := ""
-var display_name := ""
+var email := ""
+var session_id := ""
 var access_token := ""
 var refresh_token := ""
 var game_token := ""
+var game_token_expires_at := ""
 
 var characters: Array = []
 var selected_character_id := ""
@@ -21,14 +23,16 @@ var inventory: Array = []
 func set_session(data: Dictionary) -> void:
 	if data.has("accountId"):
 		account_id = String(data["accountId"])
-	if data.has("displayName"):
-		display_name = String(data["displayName"])
 	if data.has("accessToken"):
 		access_token = String(data["accessToken"])
 	if data.has("refreshToken"):
 		refresh_token = String(data["refreshToken"])
-	if data.has("gameToken"):
-		game_token = String(data["gameToken"])
+
+
+func display_name() -> String:
+	var source := email if email != "" else account_id
+	var at := source.find("@")
+	return source.substr(0, at) if at > 0 else source
 
 
 func set_characters(list: Array) -> void:
@@ -51,13 +55,15 @@ func set_inventory(items: Array) -> void:
 
 
 func is_authenticated() -> bool:
-	return account_id != "" or game_token != ""
+	return access_token != "" or game_token != ""
 
 
 func clear_session() -> void:
 	access_token = ""
 	refresh_token = ""
 	game_token = ""
+	game_token_expires_at = ""
 	selected_character_id = ""
+	session_id = ""
 	characters = []
 	inventory = []

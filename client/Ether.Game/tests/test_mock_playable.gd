@@ -1,33 +1,37 @@
 extends TestCase
 
-## End-to-end mock playable flow through the real networking pipeline:
-## connect -> authenticate -> select -> world -> move -> attack -> XP -> loot
-## -> inventory -> disconnect -> reconnect. No engine tree required: the
-## NetworkClient loop is pumped manually.
+## End-to-end mock flow through the real networking pipeline:
+## connect -> game.authenticate -> world.enter -> world.snapshot -> movement ->
+## movement.accepted/rejected -> disconnect -> reconnect. No engine tree needed:
+## the NetworkClient loop is pumped manually.
+
+const TOKEN := "mock-game-token"
 
 var network: NetworkClient
 var backend: MockBackend
 var world: WorldState
 var events: Array = []
-var last_inventory: Array = []
+var errors: Array = []
 
 
-func _setup_mock() -> void:
+func _setup(heartbeat_interval: float = 20.0) -> void:
 	network = NetworkClient.new()
 	world = WorldState.new()
 	events = []
-	last_inventory = []
+	errors = []
 
 	var config := ClientConfig.new()
 	config.mock_latency_seconds = 0.0
+	config.heartbeat_interval_seconds = heartbeat_interval
+	config.heartbeat_timeout_seconds = maxf(heartbeat_interval * 2.0, 1.0)
 	network.configure(config)
 
 	backend = network.transport().backend()
-	backend.set_wandering(false)
+	backend.issue_game_token(String(backend.characters[0]["characterId"]))
 
 	network.event_received.connect(_on_event)
 	network.snapshot_received.connect(_on_snapshot)
-	network.delta_received.connect(_on_delta)
+	network.error_received.connect(_on_error)
 
 	network.connect_to_server()
 	_pump(0.2)
@@ -35,48 +39,16 @@ func _setup_mock() -> void:
 
 func _on_event(name: String, payload: Dictionary) -> void:
 	events.append(name)
-	if name == ProtocolMessages.EVT_CHARACTER_MOVED or name == ProtocolMessages.EVT_CREATURE_MOVED:
-		_apply_move(payload)
-	elif name == ProtocolMessages.EVT_ENTITY_DEATH or name == ProtocolMessages.EVT_CREATURE_DIED:
-		world.remove_entity(String(payload.get("entityId", "")))
-	elif name == ProtocolMessages.EVT_EXPERIENCE_GAINED:
-		world.apply_delta({"player": {
-			"id": world.player_id,
-			"experience": int(payload.get("total", 0)),
-			"level": int(payload.get("level", 1)),
-		}})
-	elif name == ProtocolMessages.EVT_COMBAT_RESULT or name == ProtocolMessages.EVT_DAMAGE_APPLIED:
-		var target_id := String(payload.get("targetId", ""))
-		var hp: Variant = payload.get("targetHp", payload.get("remainingHp", null))
-		if target_id != "" and hp != null:
-			world.apply_delta({"upserts": [{"id": target_id, "hp": int(hp)}]})
-	elif name == "InventoryUpdated":
-		last_inventory = payload.get("inventory", [])
-
-
-func _cleanup() -> void:
-	if network != null and is_instance_valid(network):
-		network.free()
-	network = null
-
-
-func _apply_move(payload: Dictionary) -> void:
-	var entity_id := String(payload.get("entityId", ""))
-	if entity_id == "":
-		return
-	world.apply_delta({"upserts": [{
-		"id": entity_id,
-		"x": int(payload.get("x", 0)),
-		"y": int(payload.get("y", 0)),
-	}]})
+	if name == ProtocolMessages.EVT_MOVEMENT_ACCEPTED:
+		world.apply_movement(payload)
 
 
 func _on_snapshot(payload: Dictionary) -> void:
 	world.apply_snapshot(payload)
 
 
-func _on_delta(payload: Dictionary) -> void:
-	world.apply_delta(payload)
+func _on_error(name: String, code: String, _message: String) -> void:
+	errors.append({"name": name, "code": code})
 
 
 func _pump(seconds: float) -> void:
@@ -86,95 +58,92 @@ func _pump(seconds: float) -> void:
 
 
 func _run_to_world() -> void:
-	network.authenticate("mock-token")
+	network.authenticate(TOKEN)
+	_pump(0.2)
 	network.mark_authenticated()
-	_pump(0.2)
-	network.select_character(String(backend.characters[0]["characterId"]))
-	_pump(0.2)
 	network.enter_world()
-	network.mark_in_world()
 	_pump(0.2)
+	network.mark_in_world()
+
+
+func _cleanup() -> void:
+	if network != null and is_instance_valid(network):
+		network.free()
+	network = null
 
 
 func test_connect_and_authenticate() -> void:
-	_setup_mock()
+	_setup()
 	assert_eq(network.state.current(), AppState.State.CONNECTED)
-	assert_true(events.has(ProtocolMessages.EVT_CONNECTED), "connected event")
 
-	network.authenticate("mock-token")
-	network.mark_authenticated()
+	network.authenticate(TOKEN)
 	_pump(0.2)
+	assert_true(events.has(ProtocolMessages.EVT_GAME_AUTHENTICATED), "authenticated event")
+	network.mark_authenticated()
 	assert_eq(network.state.current(), AppState.State.AUTHENTICATED)
-	assert_true(events.has(ProtocolMessages.EVT_AUTHENTICATED), "authenticated event")
 
 
 func test_enter_world_applies_snapshot() -> void:
-	_setup_mock()
+	_setup()
 	_run_to_world()
 
-	var character_id := String(backend.characters[0]["characterId"])
 	assert_eq(network.state.current(), AppState.State.IN_WORLD)
-	assert_eq(world.player_id, character_id)
-	assert_true(world.creatures().size() >= 1, "creatures spawned")
+	assert_eq(world.player_id, String(backend.characters[0]["characterId"]))
+	assert_eq(world.map_id, MockBackend.MAP_ID)
 	assert_eq(int(world.map["width"]), MockBackend.MAP_WIDTH)
+	assert_eq(world.player_position(), Vector2i(MockBackend.START_X, MockBackend.START_Y))
 
 
-func test_move_is_server_accepted() -> void:
-	_setup_mock()
+func test_movement_accepted_updates_position() -> void:
+	_setup()
 	_run_to_world()
 
-	network.move_to(6, 5)
+	network.move_to(5, 5)
 	_pump(0.2)
-	assert_eq(world.player_position(), Vector2i(6, 5))
-	assert_true(events.has(ProtocolMessages.EVT_CHARACTER_MOVED), "movement event")
+	assert_eq(world.player_position(), Vector2i(5, 5))
+	assert_true(events.has(ProtocolMessages.EVT_MOVEMENT_ACCEPTED), "movement.accepted")
 
 
-func test_move_out_of_range_is_rejected() -> void:
-	_setup_mock()
+func test_movement_out_of_bounds_is_rejected() -> void:
+	_setup()
 	_run_to_world()
 
-	network.move_to(22, 14)
+	network.move_to(999, 999)
 	_pump(0.2)
-	assert_eq(world.player_position(), MockBackend.PLAYER_SPAWN, "player should not move")
-	assert_false(events.has(ProtocolMessages.EVT_CHARACTER_MOVED), "movement should be rejected")
+	assert_eq(world.player_position(), Vector2i(0, 0), "position unchanged")
+	assert_true(_has_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_OUT_OF_BOUNDS))
 
 
-func test_attack_kills_creature_and_grants_xp() -> void:
-	_setup_mock()
+func test_movement_too_far_is_rejected() -> void:
+	_setup()
 	_run_to_world()
 
-	var creature_id := String(world.creatures()[0]["id"])
-	var creature_position := world.entity_position(creature_id)
-	var adjacent := Vector2i(creature_position.x - 1, creature_position.y)
-
-	network.move_to(adjacent.x, adjacent.y)
-	_pump(0.3)
-	assert_eq(world.player_position(), adjacent, "player adjacent to creature")
-
-	for i in range(20):
-		network.attack(creature_id)
-		_pump(0.2)
-		if not world.has_entity(creature_id):
-			break
-
-	assert_false(world.has_entity(creature_id), "creature should die")
-	assert_true(events.has(ProtocolMessages.EVT_EXPERIENCE_GAINED), "xp granted")
-	assert_true(int(world.player.get("experience", 0)) > 0, "experience increased")
-
-
-func test_pickup_updates_inventory() -> void:
-	_setup_mock()
-	_run_to_world()
-
-	network.pickup_item("item.test", "Test Item")
+	network.move_to(MockBackend.MAX_MOVE_DISTANCE + 5, 0)
 	_pump(0.2)
-	assert_true(events.has("InventoryUpdated"), "inventory event")
-	assert_eq(last_inventory.size(), 1)
-	assert_eq(String(last_inventory[0]["name"]), "Test Item")
+	assert_eq(world.player_position(), Vector2i(0, 0))
+	assert_true(_has_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_TOO_FAR))
+
+
+func test_wrong_character_movement_is_ignored() -> void:
+	var local := WorldState.new()
+	local.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 1, "y": 1, "state": "InWorld"},
+	})
+	var result := local.apply_movement({"characterId": "someone-else", "mapId": 1, "x": 9, "y": 9})
+	assert_false(bool(result["applied"]))
+	assert_eq(local.player_position(), Vector2i(1, 1))
+
+
+func test_heartbeat_ping_pong_sets_rtt() -> void:
+	_setup(0.2)
+	_run_to_world()
+	_pump(0.6)
+	assert_true(network.last_rtt_ms >= 0, "rtt measured from system.pong")
 
 
 func test_disconnect_and_reconnect_restores_world() -> void:
-	_setup_mock()
+	_setup()
 	_run_to_world()
 
 	network.disconnect_from_server()
@@ -188,4 +157,17 @@ func test_disconnect_and_reconnect_restores_world() -> void:
 
 	_run_to_world()
 	assert_eq(network.state.current(), AppState.State.IN_WORLD)
-	assert_true(world.creatures().size() >= 1, "world restored after reconnect")
+	assert_eq(world.player_id, String(backend.characters[0]["characterId"]))
+
+
+func test_state_machine_refuses_illegal_jump() -> void:
+	var state := AppState.new()
+	assert_false(state.transition(AppState.State.IN_WORLD), "cannot skip authentication")
+	assert_eq(state.current(), AppState.State.DISCONNECTED)
+
+
+func _has_error(name: String, code: String) -> bool:
+	for entry in errors:
+		if entry["name"] == name and entry["code"] == code:
+			return true
+	return false
