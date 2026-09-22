@@ -4,18 +4,26 @@ extends RefCounted
 ## Centralized client configuration.
 ##
 ## Endpoints are never hardcoded in gameplay classes: everything derives from
-## the selected profile plus environment overrides. Two modes exist:
+## the selected profile plus environment overrides.
+##
 ##   MOCK — offline development/CI (MockTransport + MockApiClient)
 ##   REAL — HTTPS/WSS against the deployed backend (Oracle Cloud)
 ##
-## Environment:
-##   ETHER_CLIENT_MODE        mock | real            (default mock)
-##   ETHER_CLIENT_PROFILE     local | remote         (default local)
-##   ETHER_CLIENT_API_URL     e.g. https://api.example
-##   ETHER_CLIENT_WS_URL      e.g. wss://game.example/game
+## On desktop the default is MOCK/LOCAL; on mobile (the exported APK) the default
+## is REAL/ORACLE so the shipped client never uses the mock transport.
+##
+## Environment (desktop / dev):
+##   ETHER_CLIENT_MODE        mock | real              (default: mobile? real : mock)
+##   ETHER_CLIENT_PROFILE     local | oracle | remote (default: mobile? oracle : local)
+##   ETHER_CLIENT_API_URL     e.g. https://game.rotagov.com.br
+##   ETHER_CLIENT_WS_URL      e.g. wss://game.rotagov.com.br/game
 
 enum Mode { MOCK, REAL }
-enum Profile { LOCAL, REMOTE }
+enum Profile { LOCAL, ORACLE, REMOTE }
+
+## Official production endpoints (Oracle Cloud via game.rotagov.com.br).
+const ORACLE_API_URL := "https://game.rotagov.com.br"
+const ORACLE_WS_URL := "wss://game.rotagov.com.br/game"
 
 var mode: int = Mode.MOCK
 var profile: int = Profile.LOCAL
@@ -52,6 +60,11 @@ static func create_default() -> ClientConfig:
 static func from_environment() -> ClientConfig:
 	var config := ClientConfig.new()
 
+	# Mobile builds default to the real Oracle backend; desktop defaults to mock.
+	var mobile := OS.has_feature("mobile")
+	config.mode = Mode.REAL if mobile else Mode.MOCK
+	config.profile = Profile.ORACLE if mobile else Profile.LOCAL
+
 	var requested_mode := OS.get_environment("ETHER_CLIENT_MODE").to_lower()
 	if requested_mode == "real" or requested_mode == "websocket":
 		config.mode = Mode.REAL
@@ -59,7 +72,9 @@ static func from_environment() -> ClientConfig:
 		config.mode = Mode.MOCK
 
 	var requested_profile := OS.get_environment("ETHER_CLIENT_PROFILE").to_lower()
-	if requested_profile == "remote":
+	if requested_profile == "oracle" or requested_profile == "production":
+		config.profile = Profile.ORACLE
+	elif requested_profile == "remote":
 		config.profile = Profile.REMOTE
 	elif requested_profile == "local":
 		config.profile = Profile.LOCAL
@@ -78,12 +93,15 @@ static func from_environment() -> ClientConfig:
 
 
 func apply_profile() -> void:
-	# LOCAL: developer-run endpoints (never started by the client itself).
-	# REMOTE: host comes exclusively from environment configuration.
 	if profile == Profile.LOCAL:
+		# Developer-run endpoints (never started by the client itself).
 		api_base_url = "http://127.0.0.1:5052"
 		game_websocket_url = "ws://127.0.0.1:5000/game"
+	elif profile == Profile.ORACLE:
+		api_base_url = ORACLE_API_URL
+		game_websocket_url = ORACLE_WS_URL
 	elif profile == Profile.REMOTE:
+		# Host comes exclusively from environment configuration.
 		api_base_url = ""
 		game_websocket_url = ""
 
@@ -101,11 +119,18 @@ func mode_name() -> String:
 
 
 func profile_name() -> String:
+	if profile == Profile.ORACLE:
+		return "oracle"
 	return "local" if profile == Profile.LOCAL else "remote"
 
 
 func has_endpoints() -> bool:
 	return api_base_url != "" and game_websocket_url != ""
+
+
+## True when the REAL endpoints use secure transports (https / wss).
+func is_secure() -> bool:
+	return api_base_url.begins_with("https://") and game_websocket_url.begins_with("wss://")
 
 
 func duplicate_config() -> ClientConfig:

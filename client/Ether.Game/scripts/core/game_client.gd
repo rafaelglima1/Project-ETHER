@@ -85,10 +85,13 @@ func _build(p_config: ClientConfig) -> void:
 # --- Public API (used by screens/world) ---------------------------------------
 
 func start() -> void:
-	log_line("Client ready (mode=%s, profile=%s)" % [_mode, config.profile_name()])
+	log_line("Client ready (mode=%s, profile=%s, platform=%s)" % [_mode, config.profile_name(), OS.get_name()])
 	if config.is_real() and not config.has_endpoints():
 		report_error("CONFIG", "Backend endpoints are not configured.")
 		return
+	if config.is_real() and config.has_endpoints() and not config.is_secure():
+		log_line("WARNING: REAL mode is using non-secure endpoints (%s / %s)" % [
+			config.api_base_url, config.game_websocket_url])
 	if network.is_connected_to_server() or network.state.current() == AppState.State.CONNECTING:
 		return
 	network.connect_to_server()

@@ -130,6 +130,22 @@ func test_stale_sequence_is_rejected_by_server() -> void:
 		_has_error("system.ping", ProtocolMessages.CODE_INVALID_SEQUENCE), "stale sequence rejected")
 
 
+func test_oracle_profile_endpoints() -> void:
+	var config := ClientConfig.new()
+	config.profile = ClientConfig.Profile.ORACLE
+	config.apply_profile()
+	assert_eq(config.api_base_url, "https://game.rotagov.com.br")
+	assert_eq(config.game_websocket_url, "wss://game.rotagov.com.br/game")
+	assert_true(config.is_secure(), "oracle profile uses https/wss")
+
+
+func test_local_profile_is_not_secure() -> void:
+	var config := ClientConfig.new()
+	config.profile = ClientConfig.Profile.LOCAL
+	config.apply_profile()
+	assert_false(config.is_secure())
+
+
 func test_player_death_then_reconnect_restores_player() -> void:
 	_setup()
 	_run_to_world()
