@@ -12,10 +12,17 @@ const PATH_REFRESH := "/auth/refresh"
 const PATH_ACCOUNT_CHARACTERS := "/accounts/%s/characters"
 const PATH_GAME_TOKEN := "/characters/%s/game-token"
 
+## Emits the HTTP method/path/status for diagnostics. Never carries secrets.
+signal http_trace(method: String, path: String, status: int)
+
 var base_url: String
 var _http: HTTPRequest = null
 var _token := ""
 var _active_request_id := ""
+var _active_method := ""
+var _active_path := ""
+var _in_flight := false
+var _queue: Array = []
 
 
 func _init(p_base_url: String = "http://localhost:8080") -> void:
@@ -77,42 +84,72 @@ func _request(method: int, path: String, body: Dictionary, authenticated: bool, 
 		_complete(request_id, false, null, "HTTP client not ready")
 		return request_id
 
-	_active_request_id = request_id
+	# A single HTTPRequest can only process one request at a time, so requests
+	# are queued and served sequentially. This prevents overlapping calls (e.g.
+	# a screen refreshing while the facade also refreshes) from failing with
+	# ERR_BUSY and from misrouting responses.
+	_queue.append({
+		"method": method,
+		"path": path,
+		"body": body,
+		"auth": authenticated,
+		"id": request_id,
+	})
+	_start_next()
+	return request_id
+
+
+func _start_next() -> void:
+	if _in_flight or _queue.is_empty():
+		return
+	var request: Dictionary = _queue.pop_front()
+	_in_flight = true
+	_active_request_id = String(request["id"])
+	_active_method = "GET" if int(request["method"]) == HTTPClient.METHOD_GET else "POST"
+	_active_path = String(request["path"])
+
 	var headers := PackedStringArray(["Content-Type: application/json"])
-	if authenticated and _token != "":
+	if bool(request["auth"]) and _token != "":
 		headers.append("Authorization: Bearer %s" % _token)
 
+	var body: Dictionary = request["body"]
 	var payload := "" if body.is_empty() else JSON.stringify(body)
-	var err := _http.request(base_url + path, headers, method, payload)
+	var err := _http.request(base_url + _active_path, headers, int(request["method"]), payload)
 	if err != OK:
+		var failed_id := _active_request_id
 		_active_request_id = ""
-		_complete(request_id, false, null, "Request failed to start (error %d)" % err)
-	return request_id
+		http_trace.emit(_active_method, _active_path, 0)
+		_complete(failed_id, false, null, "Request failed to start (error %d)" % err)
+		_in_flight = false
+		_start_next()
 
 
 func _on_request_completed(result: int, response_code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
 	var request_id := _active_request_id
+	var method := _active_method
+	var path := _active_path
 	_active_request_id = ""
-	if request_id == "":
-		return
+	http_trace.emit(method, path, response_code)
 
-	var text := body.get_string_from_utf8()
-	if result != HTTPRequest.RESULT_SUCCESS:
-		_complete(request_id, false, null, "Transport error (result %d)" % result)
-		return
-	if response_code < 200 or response_code >= 300:
-		_complete(request_id, false, null, _describe_failure(response_code, text))
-		return
+	# _in_flight stays true while completing so any request issued by a handler
+	# is queued (FIFO) rather than jumped ahead.
+	if request_id != "":
+		var text := body.get_string_from_utf8()
+		if result != HTTPRequest.RESULT_SUCCESS:
+			_complete(request_id, false, null, "Transport error (result %d)" % result)
+		elif response_code < 200 or response_code >= 300:
+			_complete(request_id, false, null, _describe_failure(response_code, text))
+		elif text.strip_edges() == "":
+			_complete(request_id, true, {}, "")
+		else:
+			var parsed: Variant = JSON.parse_string(text)
+			if parsed == null:
+				_complete(request_id, false, null, "The server returned an unreadable response.")
+			else:
+				_complete(request_id, true, parsed, "")
 
-	if text.strip_edges() == "":
-		_complete(request_id, true, {}, "")
-		return
-
-	var parsed: Variant = JSON.parse_string(text)
-	if parsed == null:
-		_complete(request_id, false, null, "The server returned an unreadable response.")
-		return
-	_complete(request_id, true, parsed, "")
+	_in_flight = false
+	_start_next()
 
 
 func _describe_failure(response_code: int, text: String) -> String:

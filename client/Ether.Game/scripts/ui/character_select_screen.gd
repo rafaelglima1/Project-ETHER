@@ -7,6 +7,8 @@ extends Control
 const CLASS_OPTIONS := ["Warrior", "Ranger", "Arcanist"]
 
 var game: Node = null
+## Optional injected GameClient (used by tests; defaults to the autoload).
+var injected_game: Node = null
 var _list: VBoxContainer
 var _status: Label
 var _new_name: LineEdit
@@ -15,13 +17,14 @@ var _class_option: OptionButton
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	game = get_node_or_null("/root/GameClient")
+	game = injected_game if injected_game != null else get_node_or_null("/root/GameClient")
 	_build()
 	if game != null:
 		game.characters_changed.connect(_on_characters_changed)
 		game.error_received.connect(_on_error)
 		game.log_message.connect(_on_log)
-		game.request_characters()
+		# GameClient owns the character fetch (it requests right after auth);
+		# requesting here too would issue a duplicate, overlapping HTTP call.
 
 
 func _build() -> void:

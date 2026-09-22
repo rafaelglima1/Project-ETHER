@@ -16,11 +16,13 @@ const SUITES := [
 	preload("res://tests/test_world_state.gd"),
 	preload("res://tests/test_client_robustness.gd"),
 	preload("res://tests/test_progression.gd"),
+	preload("res://tests/test_character_flow.gd"),
 	preload("res://tests/test_mock_playable.gd"),
 ]
 
 
 func _initialize() -> void:
+	TestCase.tree = self
 	var total := 0
 	var failed := 0
 

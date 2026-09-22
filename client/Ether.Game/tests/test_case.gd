@@ -9,6 +9,9 @@ extends RefCounted
 var failures: Array = []
 var _current := ""
 
+## SceneTree provided by the runner so suites can mount nodes/scenes.
+static var tree: SceneTree = null
+
 
 func assert_true(condition: bool, message: String = "") -> void:
 	if not condition:

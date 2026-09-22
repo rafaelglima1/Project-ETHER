@@ -44,6 +44,7 @@ var _entered_world := false
 var _mode := "mock"
 var _autoplay := false
 var _autoplay_started := false
+var _autoplay_created := false
 
 
 func _ready() -> void:
@@ -71,6 +72,8 @@ func _build(p_config: ClientConfig) -> void:
 	api.name = "ApiClient"
 	add_child(api)
 	api.completed.connect(_on_api_completed)
+	if api.has_signal("http_trace"):
+		api.http_trace.connect(_on_http_trace)
 
 	network.state_changed.connect(_on_network_state_changed)
 	network.server_connected.connect(_on_server_connected)
@@ -95,7 +98,7 @@ func start() -> void:
 	if network.is_connected_to_server() or network.state.current() == AppState.State.CONNECTING:
 		return
 	network.connect_to_server()
-	if _autoplay and config.is_mock():
+	if _autoplay:
 		call_deferred("_autoplay_login")
 
 
@@ -264,6 +267,9 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		var characters := _as_array(data)
 		client_state.set_characters(characters)
 		characters_changed.emit(characters)
+		if _autoplay and characters.is_empty() and not _autoplay_created:
+			_autoplay_created = true
+			request_create_character("Probe%d" % (Time.get_ticks_msec() % 100000), "Warrior")
 		_maybe_autoplay_select(characters)
 	elif intent == "create_character":
 		log_line("Character created.")
@@ -309,6 +315,10 @@ func _on_server_disconnected(reason: String) -> void:
 
 func _on_network_log(text: String) -> void:
 	log_line(text)
+
+
+func _on_http_trace(method: String, path: String, status: int) -> void:
+	log_line("HTTP %s %s -> %d" % [method, path, status])
 
 
 func _on_pong(rtt_ms: int) -> void:
@@ -471,8 +481,14 @@ func _on_protocol_error(name: String, code: String, _server_message: String) -> 
 # --- Autoplay (dev/smoke only, gated by ETHER_AUTOPLAY) -----------------------
 
 func _autoplay_login() -> void:
-	log_line("Autoplay enabled; signing in with a mock account.")
-	request_login("hero@example.com", "password")
+	var email := OS.get_environment("ETHER_E2E_EMAIL")
+	var password := OS.get_environment("ETHER_E2E_PASSWORD")
+	if email == "":
+		email = "hero@example.com"
+	if password == "":
+		password = "password"
+	log_line("Autoplay enabled; signing in as %s." % email)
+	request_login(email, password)
 
 
 func _maybe_autoplay_select(characters: Array) -> void:
