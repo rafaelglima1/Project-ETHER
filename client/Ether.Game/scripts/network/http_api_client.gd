@@ -23,6 +23,14 @@ func _init(p_base_url: String = "http://localhost:8080") -> void:
 
 
 func _ready() -> void:
+	_ensure_http()
+
+
+## Creates the underlying HTTPRequest lazily. In some entry points (e.g. a
+## headless SceneTree script) _ready may not have run before the first request.
+func _ensure_http() -> void:
+	if _http != null:
+		return
 	_http = HTTPRequest.new()
 	_http.timeout = 15.0
 	add_child(_http)
@@ -64,6 +72,7 @@ func request_game_token(character_id: String, p_request_id: String = "") -> Stri
 
 func _request(method: int, path: String, body: Dictionary, authenticated: bool, p_request_id: String = "") -> String:
 	var request_id := resolve_request_id(p_request_id)
+	_ensure_http()
 	if _http == null:
 		_complete(request_id, false, null, "HTTP client not ready")
 		return request_id

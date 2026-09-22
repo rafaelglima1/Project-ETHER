@@ -44,6 +44,8 @@ var _position := Vector2i.ZERO
 var _creature_id := ""
 var _next_attack_at := 0.0
 var _attacks := 0
+var _started := false
+var _finished := false
 
 
 func _initialize() -> void:
@@ -74,17 +76,28 @@ func _initialize() -> void:
 	_network.event_received.connect(_on_event)
 	_network.snapshot_received.connect(_on_snapshot)
 	_network.error_received.connect(_on_error)
+	_network.server_connected.connect(_on_ws_connected)
 
-	var now := _now()
-	_total_deadline = now + TOTAL_TIMEOUT
-	_enter_stage(Stage.LOGIN, "login")
-	var request_id := _api.new_request_id()
-	_pending[request_id] = "login"
-	_api.login(_email, _password, request_id)
+
+func _on_ws_connected() -> void:
+	# Mirrors GameClient: authenticate as soon as the socket opens.
+	_network.authenticate(_game_token)
 
 
 func _process(_delta: float) -> bool:
+	if not _started:
+		# Start on the first frame: HTTPRequest/WebSocket need a running tree.
+		_started = true
+		_total_deadline = _now() + TOTAL_TIMEOUT
+		_enter_stage(Stage.LOGIN, "login")
+		var request_id := _api.new_request_id()
+		_pending[request_id] = "login"
+		_api.login(_email, _password, request_id)
+		return false
+
 	var now := _now()
+	if _finished:
+		return true
 	if now > _total_deadline:
 		return _fail("total timeout at stage '%s'" % _stage_name())
 	if _stage != Stage.DONE and _stage != Stage.IDLE and now > _stage_deadline:
@@ -121,8 +134,18 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		if characters.is_empty():
 			_fail("account has no characters; create one via the API first")
 			return
-		_character_id = String(characters[0].get("characterId", ""))
-		print("REAL_E2E: 2/9 characters ok (%d; using %s)" % [characters.size(), _character_id])
+		# Prefer a character that is not already in the world (a previous unclean
+		# run can leave one InWorld server-side).
+		var chosen: Dictionary = {}
+		for character in characters:
+			if typeof(character) == TYPE_DICTIONARY and String(character.get("state", "")) == "Offline":
+				chosen = character
+				break
+		if chosen.is_empty():
+			chosen = characters[0]
+		_character_id = String(chosen.get("characterId", ""))
+		print("REAL_E2E: 2/9 characters ok (%d; using %s state=%s)" % [
+			characters.size(), _character_id, String(chosen.get("state", "?"))])
 		_enter_stage(Stage.GAME_TOKEN, "game-token")
 		var rid := _api.new_request_id()
 		_pending[rid] = "game_token"
@@ -141,6 +164,8 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 # --- WebSocket ----------------------------------------------------------------
 
 func _on_event(name: String, payload: Dictionary) -> void:
+	if _finished:
+		return
 	if name == ProtocolMessages.EVT_GAME_AUTHENTICATED:
 		print("REAL_E2E: 4/9 game.authenticated ok (sessionId=%s)" % String(payload.get("sessionId", "")))
 		if String(payload.get("characterId", "")) != _character_id:
@@ -240,6 +265,8 @@ func _creature_position(creatures: Variant, creature_id: String) -> Vector2i:
 
 
 func _on_error(name: String, code: String, _message: String) -> void:
+	if _finished:
+		return
 	_fail("server error '%s' (%s)" % [name, code])
 
 
@@ -266,11 +293,13 @@ func _stage_name() -> String:
 
 func _pass(what: String) -> void:
 	_stage = Stage.DONE
+	_finished = true
 	print("REAL_E2E: PASS — %s verified end-to-end" % what)
 	quit(0)
 
 
 func _fail(reason: String) -> bool:
+	_finished = true
 	print("REAL_E2E: FAIL — %s" % reason)
 	quit(1)
 	return true
