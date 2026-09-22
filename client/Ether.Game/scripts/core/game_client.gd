@@ -497,9 +497,12 @@ func _autoplay_smoke() -> void:
 		request_attack(creature_id)
 		await get_tree().create_timer(0.35).timeout
 
-	log_line("Autoplay M6 smoke done. creature_defeated=%s player_hp=%d player_dead=%s creatures=%d" % [
+	log_line("Autoplay M6/M7 smoke done. creature_defeated=%s player_hp=%d level=%d xp=%d loot=%d player_dead=%s creatures=%d" % [
 		str(bool(world_state.get_entity(creature_id).get("dead", false))),
 		int(world_state.player.get("hp", 0)),
+		int(world_state.player.get("level", 1)),
+		int(world_state.player.get("experience", 0)),
+		client_state.inventory.size(),
 		str(bool(world_state.player.get("dead", false))),
 		world_state.creature_count(),
 	])

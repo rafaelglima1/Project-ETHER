@@ -2,11 +2,11 @@ extends SceneTree
 
 ## Real end-to-end harness against the deployed backend (Oracle Cloud).
 ##
-## Drives the *real* client stack (HttpApiClient + WebSocketTransport) through
-## the full M4 flow and prints each step as evidence:
+## Drives the *real* client stack (HttpApiClient + WebSocketTransport) through the
+## full First Playable loop and prints each step as evidence:
 ##   login -> characters -> game-token -> WSS -> game.authenticate ->
 ##   game.authenticated -> world.enter -> world.snapshot -> movement.move ->
-##   movement.accepted
+##   movement.accepted -> combat.attack -> combat.result (defeat + XP + loot).
 ##
 ## Usage (client-only, never starts a local backend):
 ##   set ETHER_CLIENT_API_URL=https://<api-host>
@@ -17,10 +17,11 @@ extends SceneTree
 ##
 ## Exit codes: 0 = full flow PASS, 1 = flow FAIL, 2 = not configured (BLOCKED).
 
-enum Stage { IDLE, LOGIN, CHARACTERS, GAME_TOKEN, WS_AUTH, WORLD_ENTER, MOVE, DONE }
+enum Stage { IDLE, LOGIN, CHARACTERS, GAME_TOKEN, WS_AUTH, WORLD_ENTER, MOVE, COMBAT, DONE }
 
-const STEP_TIMEOUT := 15.0
-const TOTAL_TIMEOUT := 60.0
+const STEP_TIMEOUT := 20.0
+const TOTAL_TIMEOUT := 90.0
+const ATTACK_INTERVAL := 0.4
 
 var _config: ClientConfig
 var _api: HttpApiClient
@@ -39,6 +40,10 @@ var _game_token := ""
 var _player_id := ""
 var _map_id := -1
 var _position := Vector2i.ZERO
+
+var _creature_id := ""
+var _next_attack_at := 0.0
+var _attacks := 0
 
 
 func _initialize() -> void:
@@ -84,6 +89,12 @@ func _process(_delta: float) -> bool:
 		return _fail("total timeout at stage '%s'" % _stage_name())
 	if _stage != Stage.DONE and _stage != Stage.IDLE and now > _stage_deadline:
 		return _fail("step timeout at stage '%s'" % _stage_name())
+
+	if _stage == Stage.COMBAT and now >= _next_attack_at:
+		_next_attack_at = now + ATTACK_INTERVAL
+		_attacks += 1
+		_network.attack(ProtocolMessages.ABILITY_BASIC_ATTACK, _creature_id, ProtocolMessages.TARGET_TYPE_CREATURE)
+
 	return false
 
 
@@ -100,7 +111,7 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		var session: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
 		_account_id = String(session.get("accountId", ""))
 		_api.set_token(String(session.get("accessToken", "")))
-		print("REAL_E2E: 1/8 login ok (accountId=%s, accessToken=***)" % _account_id)
+		print("REAL_E2E: 1/9 login ok (accountId=%s, accessToken=***)" % _account_id)
 		_enter_stage(Stage.CHARACTERS, "characters")
 		var rid := _api.new_request_id()
 		_pending[rid] = "characters"
@@ -111,7 +122,7 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 			_fail("account has no characters; create one via the API first")
 			return
 		_character_id = String(characters[0].get("characterId", ""))
-		print("REAL_E2E: 2/8 characters ok (%d; using %s)" % [characters.size(), _character_id])
+		print("REAL_E2E: 2/9 characters ok (%d; using %s)" % [characters.size(), _character_id])
 		_enter_stage(Stage.GAME_TOKEN, "game-token")
 		var rid := _api.new_request_id()
 		_pending[rid] = "game_token"
@@ -122,7 +133,7 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		if _game_token == "":
 			_fail("empty game token")
 			return
-		print("REAL_E2E: 3/8 game-token ok (gameToken=***)")
+		print("REAL_E2E: 3/9 game-token ok (gameToken=***)")
 		_enter_stage(Stage.WS_AUTH, "websocket authenticate")
 		_network.connect_to_server()
 
@@ -131,21 +142,45 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 
 func _on_event(name: String, payload: Dictionary) -> void:
 	if name == ProtocolMessages.EVT_GAME_AUTHENTICATED:
-		var character_id := String(payload.get("characterId", ""))
-		print("REAL_E2E: 4/8 connected + game.authenticated ok")
-		if character_id != _character_id:
-			_fail("server authenticated unexpected character %s" % character_id)
+		print("REAL_E2E: 4/9 game.authenticated ok (sessionId=%s)" % String(payload.get("sessionId", "")))
+		if String(payload.get("characterId", "")) != _character_id:
+			_fail("server authenticated unexpected character")
 			return
-		print("REAL_E2E: 5/8 game.authenticated (sessionId=%s)" % String(payload.get("sessionId", "")))
 		_enter_stage(Stage.WORLD_ENTER, "world.enter")
 		_network.enter_world()
 	elif name == ProtocolMessages.EVT_MOVEMENT_ACCEPTED:
-		var character_id := String(payload.get("characterId", ""))
-		if character_id != _player_id:
-			return
 		_position = Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
-		print("REAL_E2E: 8/8 movement.accepted (%d,%d)" % [_position.x, _position.y])
-		_pass()
+		print("REAL_E2E: 6/9 movement.accepted (%d,%d)" % [_position.x, _position.y])
+		if _creature_id == "":
+			_pass("world + movement")
+			return
+		_enter_stage(Stage.COMBAT, "combat.attack")
+		print("REAL_E2E: 7/9 combat.attack -> %s" % _creature_id)
+		_next_attack_at = _now() + ATTACK_INTERVAL
+	elif name == ProtocolMessages.EVT_COMBAT_RESULT:
+		var target_id := String(payload.get("targetId", ""))
+		if target_id != _creature_id:
+			return
+		print("REAL_E2E:    hit %s for %d (target %d/%d)" % [
+			target_id,
+			int(payload.get("damage", 0)),
+			int(payload.get("targetHealth", 0)),
+			int(payload.get("targetMaxHealth", 0)),
+		])
+		if bool(payload.get("targetDefeated", false)):
+			print("REAL_E2E: 8/9 creature defeated after %d attack(s)" % _attacks)
+			var loot_count := 0
+			var loot_raw: Variant = payload.get(ProtocolMessages.FIELD_LOOT, [])
+			if typeof(loot_raw) == TYPE_ARRAY:
+				var loot_arr: Array = loot_raw
+				loot_count = loot_arr.size()
+			print("REAL_E2E: 9/9 reward experienceGained=%d level=%d experience=%d loot=%d" % [
+				int(payload.get(ProtocolMessages.FIELD_EXPERIENCE_GAINED, 0)),
+				int(payload.get(ProtocolMessages.FIELD_LEVEL, 0)),
+				int(payload.get(ProtocolMessages.FIELD_EXPERIENCE, 0)),
+				loot_count,
+			])
+			_pass("full first-playable loop")
 
 
 func _on_snapshot(payload: Dictionary) -> void:
@@ -153,20 +188,55 @@ func _on_snapshot(payload: Dictionary) -> void:
 	_player_id = String(player.get("characterId", _character_id))
 	_map_id = int(payload.get("mapId", -1))
 	_position = Vector2i(int(player.get("x", 0)), int(player.get("y", 0)))
-	print("REAL_E2E: 6/8 world.snapshot ok (mapId=%d, width=%d, height=%d, player=%s @ %d,%d)" % [
+	var creature_count := 0
+	var creatures_raw: Variant = payload.get("creatures", [])
+	if typeof(creatures_raw) == TYPE_ARRAY:
+		var creatures_arr: Array = creatures_raw
+		creature_count = creatures_arr.size()
+	print("REAL_E2E: 5/9 world.snapshot ok (mapId=%d %dx%d player=%s @ %d,%d, creatures=%d)" % [
 		_map_id,
 		int(payload.get("width", 0)),
 		int(payload.get("height", 0)),
 		_player_id,
 		_position.x,
 		_position.y,
+		creature_count,
 	])
 
-	# Move to an adjacent in-bounds tile (server validates; client never decides).
-	var target := Vector2i(_position.x + 1, _position.y)
+	_creature_id = _nearest_creature(payload.get("creatures", []), _position)
+	var target := _position
+	if _creature_id != "":
+		var creature_position := _creature_position(payload.get("creatures", []), _creature_id)
+		target = Vector2i(maxi(0, creature_position.x - 1), creature_position.y)
+
 	_enter_stage(Stage.MOVE, "movement.move")
-	print("REAL_E2E: 7/8 movement.move -> (%d,%d)" % [target.x, target.y])
+	print("REAL_E2E:    movement.move -> (%d,%d)" % [target.x, target.y])
 	_network.move_to(target.x, target.y)
+
+
+func _nearest_creature(creatures: Variant, origin: Vector2i) -> String:
+	if typeof(creatures) != TYPE_ARRAY:
+		return ""
+	var best := ""
+	var best_distance := 1 << 30
+	for creature in creatures:
+		if typeof(creature) != TYPE_DICTIONARY:
+			continue
+		var position := Vector2i(int(creature.get("x", 0)), int(creature.get("y", 0)))
+		var distance := maxi(absi(origin.x - position.x), absi(origin.y - position.y))
+		if distance < best_distance:
+			best_distance = distance
+			best = String(creature.get("creatureId", ""))
+	return best
+
+
+func _creature_position(creatures: Variant, creature_id: String) -> Vector2i:
+	if typeof(creatures) != TYPE_ARRAY:
+		return Vector2i.ZERO
+	for creature in creatures:
+		if typeof(creature) == TYPE_DICTIONARY and String(creature.get("creatureId", "")) == creature_id:
+			return Vector2i(int(creature.get("x", 0)), int(creature.get("y", 0)))
+	return Vector2i.ZERO
 
 
 func _on_error(name: String, code: String, _message: String) -> void:
@@ -189,12 +259,14 @@ func _stage_name() -> String:
 		Stage.WS_AUTH: return "websocket authenticate"
 		Stage.WORLD_ENTER: return "world.enter"
 		Stage.MOVE: return "movement.move"
+		Stage.COMBAT: return "combat.attack"
 		Stage.DONE: return "done"
 		_: return "idle"
 
 
-func _pass() -> void:
-	print("REAL_E2E: PASS — full M4 flow verified end-to-end")
+func _pass(what: String) -> void:
+	_stage = Stage.DONE
+	print("REAL_E2E: PASS — %s verified end-to-end" % what)
 	quit(0)
 
 
