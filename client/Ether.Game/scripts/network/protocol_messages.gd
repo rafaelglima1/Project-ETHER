@@ -89,3 +89,17 @@ const CREATURE_STATE_FLEE := "Flee"
 const CREATURE_STATE_RETURN := "Return"
 const CREATURE_STATE_DEAD := "Dead"
 const CREATURE_STATE_RESPAWNING := "Respawning"
+
+# --- M7 additive combat.result fields (progression + loot) ---
+# Additive to the frozen M5/M6 combat.result; the server writes the progression
+# integers as 0 and omits loot (null) when no reward is granted, so the client
+# only applies progression when level > 0 and loot when the array is present.
+const FIELD_EXPERIENCE_GAINED := "experienceGained"
+const FIELD_LEVEL := "level"
+const FIELD_EXPERIENCE := "experience"
+const FIELD_LEVELS_GAINED := "levelsGained"
+const FIELD_LOOT := "loot"
+const FIELD_ITEM_DEFINITION_ID := "itemDefinitionId"
+const FIELD_ITEM_INSTANCE_ID := "itemInstanceId"
+const FIELD_ITEM_NAME := "name"
+const FIELD_ITEM_QUANTITY := "quantity"

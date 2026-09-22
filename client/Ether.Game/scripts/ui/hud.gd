@@ -11,6 +11,7 @@ var _name_label: Label
 var _level_label: Label
 var _hp_label: Label
 var _hp_bar: ProgressBar
+var _xp_label: Label
 var _position_label: Label
 var _target_label: Label
 var _status_label: Label
@@ -31,6 +32,10 @@ func _ready() -> void:
 		game.rtt_changed.connect(_on_rtt)
 		if game.has_signal("target_changed"):
 			game.target_changed.connect(_on_target_changed)
+		if game.has_signal("experience_changed"):
+			game.experience_changed.connect(_on_experience)
+		if game.has_signal("loot_received"):
+			game.loot_received.connect(_on_loot)
 		game.world_state.player_updated.connect(_refresh)
 		_refresh()
 
@@ -60,6 +65,9 @@ func _build() -> void:
 	_hp_bar.custom_minimum_size = Vector2(210, 16)
 	_hp_bar.max_value = 100
 	stats.add_child(_hp_bar)
+
+	_xp_label = Label.new()
+	stats.add_child(_xp_label)
 
 	_position_label = Label.new()
 	stats.add_child(_position_label)
@@ -171,6 +179,25 @@ func _refresh() -> void:
 		String(player.get("state", "")),
 		game.world_state.creature_count(),
 	]
+
+	if _xp_label != null:
+		if player.has("experience"):
+			_xp_label.text = "XP %d" % int(player.get("experience", 0))
+		else:
+			_xp_label.text = "XP -"
+
+
+func _on_experience(_level: int, _experience: int, _gained: int, _levels_gained: int) -> void:
+	_refresh()
+
+
+func _on_loot(items: Array) -> void:
+	if items.is_empty():
+		return
+	var names: Array = []
+	for item in items:
+		names.append("%s x%d" % [String(item.get("name", "Item")), int(item.get("quantity", 1))])
+	_on_feedback("Loot: %s" % ", ".join(names))
 
 
 func _on_status(text: String) -> void:

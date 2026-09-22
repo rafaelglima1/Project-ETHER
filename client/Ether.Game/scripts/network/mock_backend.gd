@@ -37,9 +37,9 @@ const ABILITY_POWER := "warrior.power_strike"
 
 # Creature definitions (mirror CreatureCatalog).
 const CREATURE_TEMPLATES := [
-	{"definitionId": "creature.slime", "name": "Slime", "level": 1, "maxHealth": 30, "attackPower": 5.0, "armor": 1.0, "moveSpeed": 1, "aggroRange": 6, "attackRange": 1, "attackCooldown": 2.0, "leashRange": 10, "respawnDelay": 30.0},
-	{"definitionId": "creature.wolf", "name": "Wolf", "level": 2, "maxHealth": 45, "attackPower": 8.0, "armor": 2.0, "moveSpeed": 2, "aggroRange": 8, "attackRange": 1, "attackCooldown": 1.5, "leashRange": 14, "respawnDelay": 45.0},
-	{"definitionId": "creature.spider", "name": "Spider", "level": 2, "maxHealth": 35, "attackPower": 7.0, "armor": 1.0, "moveSpeed": 2, "aggroRange": 7, "attackRange": 2, "attackCooldown": 2.0, "leashRange": 12, "respawnDelay": 40.0},
+	{"definitionId": "creature.slime", "name": "Slime", "level": 1, "maxHealth": 30, "attackPower": 5.0, "armor": 1.0, "moveSpeed": 1, "aggroRange": 6, "attackRange": 1, "attackCooldown": 2.0, "leashRange": 10, "respawnDelay": 30.0, "xpReward": 12},
+	{"definitionId": "creature.wolf", "name": "Wolf", "level": 2, "maxHealth": 45, "attackPower": 8.0, "armor": 2.0, "moveSpeed": 2, "aggroRange": 8, "attackRange": 1, "attackCooldown": 1.5, "leashRange": 14, "respawnDelay": 45.0, "xpReward": 25},
+	{"definitionId": "creature.spider", "name": "Spider", "level": 2, "maxHealth": 35, "attackPower": 7.0, "armor": 1.0, "moveSpeed": 2, "aggroRange": 7, "attackRange": 2, "attackCooldown": 2.0, "leashRange": 12, "respawnDelay": 40.0, "xpReward": 18},
 ]
 
 const SPAWNS := [
@@ -55,6 +55,7 @@ var selected_character_id := ""
 var characters: Array = []
 var ai_enabled := true
 var criticals_enabled := true
+var loot_guaranteed := false
 
 var _state: int = STATE_CONNECTING
 var _outbound_sequence := 0
@@ -64,6 +65,8 @@ var _clock := 0.0
 var _player_x := START_X
 var _player_y := START_Y
 var _player_hp := PLAYER_MAX_HEALTH
+var _player_level := 1
+var _player_xp := 0
 var _player_dead := false
 var _ability_ready_at := {}
 var _creatures: Dictionary = {}
@@ -84,6 +87,8 @@ func reset() -> void:
 	_player_x = START_X
 	_player_y = START_Y
 	_player_hp = PLAYER_MAX_HEALTH
+	_player_level = 1
+	_player_xp = 0
 	_player_dead = false
 	_ability_ready_at = {}
 	_creatures = {}
@@ -111,6 +116,10 @@ func set_ai_enabled(enabled: bool) -> void:
 
 func set_critical_enabled(enabled: bool) -> void:
 	criticals_enabled = enabled
+
+
+func set_loot_guaranteed(enabled: bool) -> void:
+	loot_guaranteed = enabled
 
 
 # --- Transport-facing API -----------------------------------------------------
@@ -198,6 +207,8 @@ func _handle_enter_world(request_id: String, sequence: int) -> Array:
 	_player_x = START_X
 	_player_y = START_Y
 	_player_hp = PLAYER_MAX_HEALTH
+	_player_level = 1
+	_player_xp = 0
 	_player_dead = false
 	_spawn_creatures()
 	return [_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), request_id, sequence)]
@@ -261,12 +272,17 @@ func _handle_attack(payload: Dictionary, request_id: String, sequence: int) -> A
 	var hit := _resolve_damage(float(ability["base"]) + PLAYER_ATTACK_POWER * float(ability["scaling"]), float(creature["armor"]))
 	creature["hp"] = maxi(0, int(creature["hp"]) - int(hit["damage"]))
 	var defeated := int(creature["hp"]) <= 0
+	var xp_gained := 0
+	var loot: Array = []
 	if defeated:
 		creature["state"] = ProtocolMessages.CREATURE_STATE_DEAD
 		creature["targetId"] = ""
 		creature["respawnAt"] = _clock + float(creature["respawnDelay"])
+		xp_gained = int(creature["xpReward"])
+		_player_xp += xp_gained
+		loot = _roll_loot(creature)
 
-	var out: Array = [_event(ProtocolMessages.EVT_COMBAT_RESULT, {
+	var result_payload := {
 		"attackerId": selected_character_id,
 		"targetId": target_id,
 		"abilityId": ability_id,
@@ -279,8 +295,43 @@ func _handle_attack(payload: Dictionary, request_id: String, sequence: int) -> A
 		"targetDefeated": defeated,
 		"attackerType": ProtocolMessages.TARGET_TYPE_CHARACTER,
 		"targetType": ProtocolMessages.TARGET_TYPE_CREATURE,
-	}, request_id, sequence)]
+		# M7 additive progression fields (0 when no reward is granted).
+		"experienceGained": xp_gained,
+		"level": _player_level if defeated else 0,
+		"experience": _player_xp if defeated else 0,
+		"levelsGained": 0,
+	}
+	if not loot.is_empty():
+		result_payload["loot"] = loot
+
+	var out: Array = [_event(ProtocolMessages.EVT_COMBAT_RESULT, result_payload, request_id, sequence)]
 	return out
+
+
+func _roll_loot(creature: Dictionary) -> Array:
+	if loot_guaranteed:
+		return [_loot_entry(creature)]
+	var loot: Array = []
+	if _rng.randf() < 0.75:
+		loot.append(_loot_entry(creature))
+	if _rng.randf() < 0.2:
+		loot.append({
+			"itemDefinitionId": "item.coin_pouch",
+			"name": "Coin Pouch",
+			"quantity": 1,
+			"itemInstanceId": _new_guid(),
+		})
+	return loot
+
+
+func _loot_entry(creature: Dictionary) -> Dictionary:
+	var is_slime := String(creature["definitionId"]) == "creature.slime"
+	return {
+		"itemDefinitionId": "item.slime_gel" if is_slime else "item.beast_part",
+		"name": "Slime Gel" if is_slime else "Beast Part",
+		"quantity": 1,
+		"itemInstanceId": _new_guid(),
+	}
 
 
 func _ability(ability_id: String) -> Dictionary:
@@ -405,6 +456,7 @@ func _spawn_creatures() -> void:
 			"attackCooldown": template["attackCooldown"],
 			"respawnDelay": template["respawnDelay"],
 			"leashRange": template["leashRange"],
+			"xpReward": template["xpReward"],
 			"attackReadyAt": 0.0,
 			"nextMoveAt": 0.0,
 			"respawnAt": null,

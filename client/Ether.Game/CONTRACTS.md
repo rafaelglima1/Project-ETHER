@@ -92,3 +92,37 @@ The client treats all creature data as presentation only: positions, HP, state
 and death always come from the server. The client never runs creature AI or
 computes creature damage.
 
+---
+
+## M7 — progression + loot (additive; provisional pending backend freeze)
+
+`combat.result` is extended **additively** with progression and loot. The server
+writes the progression integers as `0` and omits `loot` (null) when a kill grants
+no reward, so the client:
+
+- applies progression only when `level > 0`;
+- applies loot only when a `loot` array is present and non-empty.
+
+```json
+{
+  "attackerId": "...", "targetId": "...", "abilityId": "warrior.basic_attack",
+  "damage": 12, "critical": false,
+  "targetHealth": 0, "targetMaxHealth": 30, "targetState": "Dead", "targetDefeated": true,
+  "attackerType": "character", "targetType": "creature",
+  "experienceGained": 12, "level": 2, "experience": 120, "levelsGained": 0,
+  "loot": [
+    { "itemDefinitionId": "item.slime_gel", "name": "Slime Gel",
+      "quantity": 1, "itemInstanceId": "..." }
+  ]
+}
+```
+
+The client updates the player mirror (level/experience), emits XP/level-up
+feedback, merges `loot` into the inventory mirror (`ClientState.add_loot`,
+stacked by `itemDefinitionId`), and re-emits inventory changes. No XP curve, no
+loot roll and no ownership decision is made client-side.
+
+> Provisional: this section tracks additive fields observed while the backend M7
+> contract was in progress. It is guarded (inert unless populated) and will be
+> reconciled when the contract is committed.
+

@@ -54,6 +54,34 @@ func set_inventory(items: Array) -> void:
 	inventory = items.duplicate(true)
 
 
+## Merges server-granted loot into the inventory mirror (stacks by definition id,
+## falling back to the item name). Purely a mirror: the server decides loot.
+func add_loot(items: Array) -> void:
+	for item in items:
+		if typeof(item) != TYPE_DICTIONARY:
+			continue
+		var definition_id := String(item.get(ProtocolMessages.FIELD_ITEM_DEFINITION_ID, ""))
+		var item_name := String(item.get(ProtocolMessages.FIELD_ITEM_NAME, "Item"))
+		var quantity := int(item.get(ProtocolMessages.FIELD_ITEM_QUANTITY, 1))
+		var key := definition_id if definition_id != "" else item_name
+		var merged := false
+		for existing in inventory:
+			var existing_key := String(existing.get(ProtocolMessages.FIELD_ITEM_DEFINITION_ID, ""))
+			if existing_key == "":
+				existing_key = String(existing.get(ProtocolMessages.FIELD_ITEM_NAME, ""))
+			if existing_key == key:
+				existing[ProtocolMessages.FIELD_ITEM_QUANTITY] = int(existing.get(ProtocolMessages.FIELD_ITEM_QUANTITY, 0)) + quantity
+				merged = true
+				break
+		if not merged:
+			inventory.append({
+				ProtocolMessages.FIELD_ITEM_DEFINITION_ID: definition_id,
+				ProtocolMessages.FIELD_ITEM_INSTANCE_ID: String(item.get(ProtocolMessages.FIELD_ITEM_INSTANCE_ID, "")),
+				ProtocolMessages.FIELD_ITEM_NAME: item_name,
+				ProtocolMessages.FIELD_ITEM_QUANTITY: quantity,
+			})
+
+
 func is_authenticated() -> bool:
 	return access_token != "" or game_token != ""
 

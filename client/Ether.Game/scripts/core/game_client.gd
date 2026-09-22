@@ -23,6 +23,8 @@ signal rtt_changed(ms: int)
 signal target_changed(target_id: String)
 signal combat_result(attacker_id: String, target_id: String, damage: int, critical: bool, target_health: int, target_max_health: int, defeated: bool)
 signal creature_defeated(creature_id: String)
+signal experience_changed(level: int, experience: int, gained: int, levels_gained: int)
+signal loot_received(items: Array)
 
 var config: ClientConfig = null
 var network: NetworkClient = null
@@ -378,6 +380,49 @@ func _handle_combat_result(payload: Dictionary) -> void:
 		creature_defeated.emit(target_id)
 		if selected_target_id == target_id:
 			clear_target()
+
+	# M7 additive: progression and loot may ride along on combat.result. The
+	# client applies them only when the server actually populated them.
+	_apply_combat_progression(payload)
+	_apply_combat_loot(payload)
+
+
+## Applies additive progression fields. The server writes level=0 when no reward
+## is granted, so progression is applied only when level > 0.
+func _apply_combat_progression(payload: Dictionary) -> void:
+	var level := int(payload.get(ProtocolMessages.FIELD_LEVEL, 0))
+	if level <= 0:
+		return
+	var experience := int(payload.get(ProtocolMessages.FIELD_EXPERIENCE, 0))
+	var gained := int(payload.get(ProtocolMessages.FIELD_EXPERIENCE_GAINED, 0))
+	var levels_gained := int(payload.get(ProtocolMessages.FIELD_LEVELS_GAINED, 0))
+
+	if world_state.player_id != "":
+		world_state.apply_delta({"player": {
+			"id": world_state.player_id,
+			"level": level,
+			"experience": experience,
+		}})
+
+	if gained > 0:
+		feedback.emit("+%d XP" % gained)
+	if levels_gained > 0:
+		feedback.emit("Level up! You are now level %d." % level)
+
+	experience_changed.emit(level, experience, gained, levels_gained)
+
+
+## Applies additive loot from combat.result to the inventory mirror.
+func _apply_combat_loot(payload: Dictionary) -> void:
+	if not payload.has(ProtocolMessages.FIELD_LOOT):
+		return
+	var raw: Variant = payload.get(ProtocolMessages.FIELD_LOOT)
+	if typeof(raw) != TYPE_ARRAY or raw.is_empty():
+		return
+	var items: Array = raw
+	client_state.add_loot(items)
+	loot_received.emit(items)
+	inventory_changed.emit(client_state.inventory)
 
 
 func _handle_authenticated(payload: Dictionary) -> void:
