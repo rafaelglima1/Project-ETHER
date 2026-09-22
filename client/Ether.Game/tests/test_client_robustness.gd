@@ -29,12 +29,18 @@ func _setup() -> void:
 	backend.set_critical_enabled(false)
 	backend.issue_game_token(String(backend.characters[0]["characterId"]))
 
-	network.event_received.connect(func(name, _payload): events.append(name))
+	network.event_received.connect(_on_event)
 	network.error_received.connect(func(name, code, _message): errors.append({"name": name, "code": code}))
 	network.snapshot_received.connect(func(payload): world.apply_snapshot(payload))
 
 	network.connect_to_server()
 	_pump(0.2)
+
+
+func _on_event(name: String, payload: Dictionary) -> void:
+	events.append(name)
+	if name == ProtocolMessages.EVT_COMBAT_RESULT:
+		world.apply_combat_result(payload)
 
 
 func _pump(seconds: float) -> void:
@@ -122,3 +128,27 @@ func test_stale_sequence_is_rejected_by_server() -> void:
 	_pump(0.2)
 	assert_true(_has_error(ProtocolMessages.ERR_PROTOCOL, ProtocolMessages.CODE_INVALID_SEQUENCE) or
 		_has_error("system.ping", ProtocolMessages.CODE_INVALID_SEQUENCE), "stale sequence rejected")
+
+
+func test_player_death_then_reconnect_restores_player() -> void:
+	_setup()
+	_run_to_world()
+	var player_id := world.player_id
+
+	# Server reports the player died (injected frame).
+	var frame := '{"version":1,"type":"event","name":"combat.result","sequence":500,"payload":{' \
+		+ '"attackerId":"creature","targetId":"%s","abilityId":"creature.attack","damage":10,' \
+		% player_id \
+		+ '"critical":false,"targetHealth":0,"targetMaxHealth":100,"targetState":"Dead",' \
+		+ '"targetDefeated":true,"attackerType":"creature","targetType":"character"}}'
+	network._on_message(frame)
+	assert_true(bool(world.get_entity(player_id).get("dead", false)), "player marked dead")
+
+	# Reconnect rebuilds the world from a fresh snapshot.
+	network.disconnect_from_server()
+	_pump(0.2)
+	network.connect_to_server()
+	_pump(0.2)
+	_run_to_world()
+	assert_false(bool(world.get_entity(player_id).get("dead", false)), "player alive after reconnect")
+	assert_eq(world.creature_count(), 3, "world restored")

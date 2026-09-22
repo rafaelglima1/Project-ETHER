@@ -68,6 +68,20 @@ func test_update_player_from_patch_preserves_fields() -> void:
 	assert_eq(String(world.player.get("kind", "")), "player", "kind preserved")
 
 
+func test_snapshot_player_progression_fields_ingested() -> void:
+	var world := WorldState.new()
+	world.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {
+			"characterId": CHARACTER_ID, "x": 1, "y": 1, "state": "InWorld",
+			"level": 3, "experience": 250, "experienceToNext": 400,
+		},
+	})
+	assert_eq(int(world.player.get("level", 0)), 3)
+	assert_eq(int(world.player.get("experience", 0)), 250)
+	assert_eq(int(world.player.get("experienceToNext", 0)), 400)
+
+
 func _canonical_snapshot() -> Dictionary:
 	return {
 		"mapId": 1,
