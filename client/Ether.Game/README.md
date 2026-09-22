@@ -152,6 +152,18 @@ pending. `BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched
 Implemented: authentication, characters, game token, realtime transport, world
 enter, snapshot, server-authoritative movement, combat (`combat.attack` →
 `combat.result`), creatures + AI replication/rendering, heartbeat, reconnect,
-offline mock. **Not implemented** (out of scope, next milestones): XP, loot,
-inventory, equipment, quests, NPCs, chat, party, guild, PvP, market, crafting,
-monetization.
+offline mock, and **provisional additive consumption of M7 progression + loot**
+(guarded: applied only when the server populates `level > 0` / a `loot` array).
+
+**Not implemented** (out of scope, next milestones): authoritative inventory
+(server-pushed inventory list), equipment, quests, NPCs, chat, party, guild,
+PvP, market, crafting, monetization.
+
+### Night-run validation (client)
+- 89/89 headless tests (protocol, transport, robustness, state, combat, AI,
+  progression, reconnect).
+- Autoplay smoke: `creature_defeated=true player_hp=88 level=1 xp=12 loot=1`.
+- `tests/real_e2e.gd` drives the full loop (… movement → combat → defeat → XP →
+  loot) and is ready to run against the deployed endpoints.
+- Android: `BLOCKED_BY_LOCAL_ENVIRONMENT` (no SDK/export templates; JDK 8).
+- Oracle: `ORACLE_E2E_PENDING_ENDPOINT` (no public endpoint; loopback behind a proxy).
