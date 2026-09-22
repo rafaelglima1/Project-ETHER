@@ -94,14 +94,11 @@ computes creature damage.
 
 ---
 
-## M7 — progression + loot (additive; provisional pending backend freeze)
+## M7 — progression + loot (frozen in ADR-0006)
 
-`combat.result` is extended **additively** with progression and loot. The server
-writes the progression integers as `0` and omits `loot` (null) when a kill grants
-no reward, so the client:
+Additive to M5/M6; M4–M6 clients keep working.
 
-- applies progression only when `level > 0`;
-- applies loot only when a `loot` array is present and non-empty.
+### `combat.result` (additive)
 
 ```json
 {
@@ -117,12 +114,27 @@ no reward, so the client:
 }
 ```
 
+The server writes the progression integers as `0` and omits `loot` (null) when a
+kill grants no reward, so the client:
+
+- applies progression only when `level > 0`;
+- applies loot only when a `loot` array is present and non-empty.
+
+### `world.snapshot.player` (additive)
+
+```json
+{
+  "characterId": "...", "x": 10, "y": 12, "state": "InWorld",
+  "level": 3, "experience": 250, "experienceToNextLevel": 400,
+  "health": 80, "maxHealth": 100
+}
+```
+
+The client maps `health → hp`, `maxHealth → maxHp`, `experienceToNextLevel →
+experienceToNext` and renders the player mirror.
+
 The client updates the player mirror (level/experience), emits XP/level-up
 feedback, merges `loot` into the inventory mirror (`ClientState.add_loot`,
-stacked by `itemDefinitionId`), and re-emits inventory changes. No XP curve, no
+stacked by `itemDefinitionId`) and re-emits inventory changes. No XP curve, no
 loot roll and no ownership decision is made client-side.
-
-> Provisional: this section tracks additive fields observed while the backend M7
-> contract was in progress. It is guarded (inert unless populated) and will be
-> reconciled when the contract is committed.
 

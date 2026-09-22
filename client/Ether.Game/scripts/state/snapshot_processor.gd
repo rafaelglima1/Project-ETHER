@@ -130,6 +130,12 @@ static func normalize_patch(item: Variant) -> Dictionary:
 	for key in ["x", "y", "hp", "maxHp", "level", "experience", "experienceToNext", "gold"]:
 		if data.has(key):
 			patch[key] = int(data[key])
+	if data.has("health"):
+		patch["hp"] = int(data["health"])
+	if data.has("maxHealth"):
+		patch["maxHp"] = int(data["maxHealth"])
+	if data.has("experienceToNextLevel"):
+		patch["experienceToNext"] = int(data["experienceToNextLevel"])
 	if data.has("dead"):
 		patch["dead"] = bool(data["dead"])
 	if data.has("inventory") and typeof(data["inventory"]) == TYPE_ARRAY:
@@ -148,6 +154,13 @@ static func _copy_optional(data: Dictionary, target: Dictionary) -> void:
 	for key in ["hp", "maxHp", "level", "experience", "experienceToNext", "gold"]:
 		if data.has(key):
 			target[key] = int(data[key])
+	# Canonical M7 snapshot aliases (health/maxHealth/experienceToNextLevel).
+	if data.has("health"):
+		target["hp"] = int(data["health"])
+	if data.has("maxHealth"):
+		target["maxHp"] = int(data["maxHealth"])
+	if data.has("experienceToNextLevel"):
+		target["experienceToNext"] = int(data["experienceToNextLevel"])
 	if data.has("dead"):
 		target["dead"] = bool(data["dead"])
 	if data.has("inventory") and typeof(data["inventory"]) == TYPE_ARRAY:

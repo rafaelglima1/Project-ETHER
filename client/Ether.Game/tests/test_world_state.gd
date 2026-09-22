@@ -74,12 +74,15 @@ func test_snapshot_player_progression_fields_ingested() -> void:
 		"mapId": 1, "width": 32, "height": 32,
 		"player": {
 			"characterId": CHARACTER_ID, "x": 1, "y": 1, "state": "InWorld",
-			"level": 3, "experience": 250, "experienceToNext": 400,
+			"level": 3, "experience": 250, "experienceToNextLevel": 400,
+			"health": 80, "maxHealth": 100,
 		},
 	})
 	assert_eq(int(world.player.get("level", 0)), 3)
 	assert_eq(int(world.player.get("experience", 0)), 250)
-	assert_eq(int(world.player.get("experienceToNext", 0)), 400)
+	assert_eq(int(world.player.get("experienceToNext", 0)), 400, "experienceToNextLevel mapped")
+	assert_eq(int(world.player.get("hp", 0)), 80, "health mapped to hp")
+	assert_eq(int(world.player.get("maxHp", 0)), 100, "maxHealth mapped to maxHp")
 
 
 func _canonical_snapshot() -> Dictionary:
