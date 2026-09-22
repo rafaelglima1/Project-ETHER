@@ -1,11 +1,13 @@
 using Ether.Application.Abstractions;
 using Ether.Application.Exceptions;
+using Ether.Application.Progression;
 using Ether.Contracts.Combat;
 using Ether.Contracts.Configuration;
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
 using Ether.Domain.Combat;
 using Ether.Domain.Creatures;
+using Ether.Domain.Items;
 
 using Microsoft.Extensions.Options;
 
@@ -24,6 +26,7 @@ public sealed class AttackCreatureCommandHandler
     private readonly IAbilityCooldownStore _cooldowns;
     private readonly IEntityLockProvider _locks;
     private readonly IRandomSource _random;
+    private readonly KillRewardService _rewards;
     private readonly CombatOptions _options;
     private readonly TimeProvider _timeProvider;
 
@@ -35,6 +38,7 @@ public sealed class AttackCreatureCommandHandler
         IAbilityCooldownStore cooldowns,
         IEntityLockProvider locks,
         IRandomSource random,
+        KillRewardService rewards,
         IOptions<CombatOptions> options,
         TimeProvider timeProvider)
     {
@@ -47,6 +51,7 @@ public sealed class AttackCreatureCommandHandler
         _cooldowns = cooldowns;
         _locks = locks;
         _random = random;
+        _rewards = rewards;
         _options = options.Value;
         _timeProvider = timeProvider;
     }
@@ -130,6 +135,13 @@ public sealed class AttackCreatureCommandHandler
 
         var defeated = creature.ApplyDamage(damage.Damage, now, definition.RespawnDelay);
 
+        // Rewards are granted exactly once, on the lethal transition.
+        KillRewardResult? reward = null;
+        if (defeated)
+        {
+            reward = await _rewards.GrantAsync(attacker, definition, cancellationToken).ConfigureAwait(false);
+        }
+
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return new CombatResultResponse(
@@ -144,6 +156,19 @@ public sealed class AttackCreatureCommandHandler
             creature.State.ToString(),
             defeated,
             AttackerType: "character",
-            TargetType: "creature");
+            TargetType: "creature",
+            ExperienceGained: reward?.ExperienceGained ?? 0,
+            Level: reward?.Level ?? attacker.Level,
+            Experience: reward?.Experience ?? attacker.Experience,
+            LevelsGained: reward?.LevelsGained ?? 0,
+            Loot: reward is null || reward.Items.Count == 0
+                ? null
+                : reward.Items
+                    .Select(item => new LootItemPayload(
+                        item.DefinitionId.Value,
+                        ItemCatalog.Get(item.DefinitionId).Name,
+                        item.Quantity,
+                        item.Id.Value))
+                    .ToList());
     }
 }

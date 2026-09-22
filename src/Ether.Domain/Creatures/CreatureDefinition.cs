@@ -22,7 +22,8 @@ public sealed record CreatureDefinition
         TimeSpan attackCooldown,
         int leashRange,
         TimeSpan respawnDelay,
-        IReadOnlyDictionary<DamageType, double> resistances)
+        IReadOnlyDictionary<DamageType, double> resistances,
+        long experienceReward = 0)
     {
         if (id.IsEmpty)
         {
@@ -64,6 +65,11 @@ public sealed record CreatureDefinition
             throw new DomainException("Creature timers must not be negative.");
         }
 
+        if (experienceReward < 0)
+        {
+            throw new DomainException("Creature experience reward must not be negative.");
+        }
+
         Id = id;
         Name = name;
         Level = level;
@@ -77,6 +83,7 @@ public sealed record CreatureDefinition
         LeashRange = leashRange;
         RespawnDelay = respawnDelay;
         Resistances = resistances;
+        ExperienceReward = experienceReward;
     }
 
     public CreatureDefinitionId Id { get; }
@@ -108,6 +115,9 @@ public sealed record CreatureDefinition
     public TimeSpan RespawnDelay { get; }
 
     public IReadOnlyDictionary<DamageType, double> Resistances { get; }
+
+    /// <summary>Experience granted to the killer.</summary>
+    public long ExperienceReward { get; }
 
     /// <summary>Combat stats used when the creature attacks.</summary>
     public CombatStats AttackStats() =>

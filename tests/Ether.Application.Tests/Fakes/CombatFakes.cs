@@ -1,6 +1,7 @@
 using Ether.Application.Abstractions;
 using Ether.Domain.Characters;
 using Ether.Domain.Combat;
+using Ether.Domain.Items;
 
 namespace Ether.Application.Tests.Fakes;
 
@@ -61,4 +62,24 @@ internal sealed class NoopEntityLockProvider : IEntityLockProvider
     {
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+}
+
+/// <summary>In-memory owned items for application tests.</summary>
+internal sealed class FakeItemInstanceRepository : IItemInstanceRepository
+{
+    private readonly List<ItemInstance> _items = [];
+
+    public IReadOnlyList<ItemInstance> All => _items;
+
+    public Task AddAsync(ItemInstance item, CancellationToken cancellationToken)
+    {
+        _items.Add(item);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ItemInstance>> GetByOwnerAsync(
+        Ether.Domain.Characters.CharacterId characterId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ItemInstance>>(
+            _items.Where(item => item.OwnerCharacterId == characterId).ToList());
 }

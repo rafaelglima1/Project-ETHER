@@ -1,5 +1,6 @@
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
+using Ether.Domain.Items;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -7,7 +8,7 @@ namespace Ether.Infrastructure.Persistence;
 
 /// <summary>
 /// Primary persistence context (PostgreSQL).
-/// M1 maps only Account and Character; later bounded contexts add their own mappings.
+/// Mappings are added per bounded context; every table here reflects implemented features.
 /// </summary>
 public sealed class EtherDbContext : DbContext
 {
@@ -19,6 +20,8 @@ public sealed class EtherDbContext : DbContext
     public DbSet<Account> Accounts => Set<Account>();
 
     public DbSet<Character> Characters => Set<Character>();
+
+    public DbSet<ItemInstance> ItemInstances => Set<ItemInstance>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

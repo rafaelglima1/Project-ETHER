@@ -4,6 +4,7 @@ using Ether.Infrastructure.Accounts;
 using Ether.Infrastructure.Authentication;
 using Ether.Infrastructure.Characters;
 using Ether.Infrastructure.Dependencies;
+using Ether.Infrastructure.Items;
 using Ether.Infrastructure.Memory;
 using Ether.Infrastructure.Persistence;
 using Ether.Infrastructure.Random;
@@ -104,6 +105,7 @@ public static class InfrastructureServiceCollectionExtensions
         // Repositories and unit of work depend on the always-registered EF Core context.
         services.AddScoped<IAccountRepository, EfAccountRepository>();
         services.AddScoped<ICharacterRepository, EfCharacterRepository>();
+        services.AddScoped<IItemInstanceRepository, EfItemInstanceRepository>();
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();
 
         return services;

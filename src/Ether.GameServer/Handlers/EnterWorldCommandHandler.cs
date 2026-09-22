@@ -112,7 +112,16 @@ public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
             character.MapId,
             map.Width,
             map.Height,
-            new PlayerSnapshotPayload(character.CharacterId, character.PositionX, character.PositionY, character.State),
+            new PlayerSnapshotPayload(
+                character.CharacterId,
+                character.PositionX,
+                character.PositionY,
+                character.State,
+                character.Level,
+                character.Experience,
+                character.ExperienceToNextLevel,
+                character.Health,
+                character.MaxHealth),
             _timeProvider.GetUtcNow(),
             creatures);
 

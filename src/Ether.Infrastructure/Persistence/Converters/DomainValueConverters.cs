@@ -1,5 +1,6 @@
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
+using Ether.Domain.Items;
 using Ether.Domain.World;
 
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -17,4 +18,10 @@ internal static class DomainValueConverters
 
     public static readonly ValueConverter<MapId, int> MapId =
         new(mapId => mapId.Value, value => new MapId(value));
+
+    public static readonly ValueConverter<ItemDefinitionId, string> ItemDefinitionId =
+        new(itemDefinitionId => itemDefinitionId.Value, value => new ItemDefinitionId(value));
+
+    public static readonly ValueConverter<ItemInstanceId, Guid> ItemInstanceId =
+        new(itemInstanceId => itemInstanceId.Value, value => new ItemInstanceId(value));
 }

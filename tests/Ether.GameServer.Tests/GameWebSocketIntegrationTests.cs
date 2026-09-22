@@ -35,11 +35,13 @@ public sealed class GameWebSocketIntegrationTests
                 services.RemoveAll<IAccountRepository>();
                 services.RemoveAll<ICharacterRepository>();
                 services.RemoveAll<IUnitOfWork>();
+                services.RemoveAll<IItemInstanceRepository>();
 
                 services.AddSingleton(persistence);
                 services.AddSingleton<IAccountRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
                 services.AddSingleton<ICharacterRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
                 services.AddSingleton<IUnitOfWork>(provider => provider.GetRequiredService<InMemoryPersistence>());
+                services.AddSingleton<IItemInstanceRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
             });
         });
     }

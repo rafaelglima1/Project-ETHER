@@ -2,15 +2,17 @@ using Ether.Application.Abstractions;
 using Ether.Application.Exceptions;
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
+using Ether.Domain.Items;
 
 namespace Ether.GameServer.Tests.Fakes;
 
 /// <summary>In-memory persistence used by GameServer unit and integration tests.</summary>
-internal sealed class InMemoryPersistence : IAccountRepository, ICharacterRepository, IUnitOfWork
+internal sealed class InMemoryPersistence : IAccountRepository, ICharacterRepository, IItemInstanceRepository, IUnitOfWork
 {
     private readonly List<Account> _accounts = [];
     private readonly List<Character> _characters = [];
     private readonly List<Character> _pendingCharacters = [];
+    private readonly List<ItemInstance> _items = [];
 
     public Task AddAsync(Account account, CancellationToken cancellationToken)
     {
@@ -45,8 +47,7 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
         Task.FromResult<IReadOnlyList<Character>>(_characters.Where(character => character.MapId == mapId).ToList());
 
     public Task SaveChangesAsync(CancellationToken cancellationToken)
-    {
-        foreach (var pending in _pendingCharacters)
+    {        foreach (var pending in _pendingCharacters)
         {
             if (_characters.Exists(character => string.Equals(character.Name, pending.Name, StringComparison.Ordinal)))
             {
@@ -58,6 +59,23 @@ internal sealed class InMemoryPersistence : IAccountRepository, ICharacterReposi
         _pendingCharacters.Clear();
         return Task.CompletedTask;
     }
+
+    public Task AddAsync(ItemInstance item, CancellationToken cancellationToken)
+    {
+        _items.Add(item);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ItemInstance>> GetByOwnerAsync(
+        CharacterId characterId,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<ItemInstance>>(
+            _items.Where(item => item.OwnerCharacterId == characterId).ToList());
+
+    public Task<IReadOnlyList<ItemInstance>> GetItemsByOwnerAsync(
+        CharacterId characterId,
+        CancellationToken cancellationToken = default) =>
+        GetByOwnerAsync(characterId, cancellationToken);
 
     public async Task<(AccountId AccountId, CharacterId CharacterId)> SeedCharacterAsync(string name = "Hero")
     {

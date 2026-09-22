@@ -25,7 +25,8 @@ public static class CreatureCatalog
             attackCooldown: TimeSpan.FromSeconds(2),
             leashRange: 10,
             respawnDelay: TimeSpan.FromSeconds(30),
-            resistances: None),
+            resistances: None,
+            experienceReward: 12),
 
         [new CreatureDefinitionId("creature.wolf")] = new CreatureDefinition(
             new CreatureDefinitionId("creature.wolf"),
@@ -40,7 +41,8 @@ public static class CreatureCatalog
             attackCooldown: TimeSpan.FromSeconds(1.5),
             leashRange: 14,
             respawnDelay: TimeSpan.FromSeconds(45),
-            resistances: None),
+            resistances: None,
+            experienceReward: 25),
 
         [new CreatureDefinitionId("creature.spider")] = new CreatureDefinition(
             new CreatureDefinitionId("creature.spider"),
@@ -55,7 +57,8 @@ public static class CreatureCatalog
             attackCooldown: TimeSpan.FromSeconds(2),
             leashRange: 12,
             respawnDelay: TimeSpan.FromSeconds(40),
-            resistances: None),
+            resistances: None,
+            experienceReward: 22),
     };
 
     public static bool TryGet(CreatureDefinitionId id, out CreatureDefinition definition) =>

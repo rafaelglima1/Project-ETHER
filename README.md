@@ -14,12 +14,9 @@ The current technical contract is **Blueprint v5.0**.
 
 **Milestone M0 — Foundation.**
 
-M0–M6 are complete. The next work item is progression (XP) and loot. See
-[`docs/decisions/ADR-0001`](docs/decisions/ADR-0001-blueprint-precedence-and-m0-scope.md),
-[`docs/decisions/ADR-0002`](docs/decisions/ADR-0002-environment-and-infrastructure.md),
-[`docs/decisions/ADR-0003`](docs/decisions/ADR-0003-realtime-protocol.md),
-[`docs/decisions/ADR-0004`](docs/decisions/ADR-0004-combat-foundation.md) and
-[`docs/decisions/ADR-0005`](docs/decisions/ADR-0005-creatures-and-ai.md).
+M0–M7 are complete. The next work item is the inventory foundation (capacity,
+stacking, equipment). See
+[`docs/decisions/`](docs/decisions) for ADR-0001…ADR-0006.
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
@@ -30,8 +27,9 @@ M0–M6 are complete. The next work item is progression (XP) and loot. See
 | M4 | GameServer WebSocket / first realtime world | ✅ Done |
 | M5 | Combat foundation (server-authoritative attack, damage, HP) | ✅ Done |
 | M6 | Creatures + AI (spawns, chase/attack/return, respawn) | ✅ Done |
-| M7 | Progression (XP) + loot | ⏭ Next |
-| Later | Inventory | — |
+| M7 | Progression (XP) + loot + item foundation | ✅ Done |
+| M8 | Inventory (capacity, stacking, equipment) | ⏭ Next |
+
 
 ### Realtime (GameServer WebSocket)
 

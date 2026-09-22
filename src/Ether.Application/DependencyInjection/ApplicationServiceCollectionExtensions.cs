@@ -3,6 +3,7 @@ using Ether.Application.Auth;
 using Ether.Application.Characters;
 using Ether.Application.Combat;
 using Ether.Application.Creatures;
+using Ether.Application.Progression;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,6 +42,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<CreatureSpawnService>();
         services.AddScoped<AttackCreatureCommandHandler>();
         services.AddScoped<CreatureAiTickHandler>();
+
+        // Progression + loot (M7).
+        services.AddScoped<KillRewardService>();
 
         return services;
     }

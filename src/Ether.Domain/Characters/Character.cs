@@ -117,6 +117,41 @@ public sealed class Character
     public bool IsAlive => Health > 0;
 
     /// <summary>
+    /// Grants experience and applies any level-ups using the canonical curve.
+    /// Returns how many levels were gained. The caller must grant each reward once
+    /// (a reward is tied to a single event, never replayed).
+    /// </summary>
+    public int GrantExperience(long amount, DateTimeOffset nowUtc)
+    {
+        if (amount < 0)
+        {
+            throw new DomainException("Experience amount must not be negative.");
+        }
+
+        if (amount == 0)
+        {
+            return 0;
+        }
+
+        Experience += amount;
+
+        var gained = 0;
+        while (Experience >= Progression.ExperienceCurve.ExperienceToAdvanceFrom(Level))
+        {
+            Experience -= Progression.ExperienceCurve.ExperienceToAdvanceFrom(Level);
+            Level++;
+            gained++;
+        }
+
+        if (gained > 0)
+        {
+            UpdatedAt = nowUtc;
+        }
+
+        return gained;
+    }
+
+    /// <summary>
     /// Marks the character as engaged in combat (InWorld → Combat).
     /// Already-combat characters are left unchanged.
     /// </summary>

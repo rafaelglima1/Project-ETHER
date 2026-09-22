@@ -19,5 +19,15 @@ internal static class CharacterMapping
             character.PositionX,
             character.PositionY,
             character.CreatedAt,
-            character.UpdatedAt);
+            character.UpdatedAt,
+            character.Health,
+            character.MaxHealth,
+            ExperienceToNextLevel(character.Level, character.Experience));
+
+    private static long ExperienceToNextLevel(int level, long experience)
+    {
+        var required = Domain.Progression.ExperienceCurve.ExperienceToAdvanceFrom(level);
+        var remaining = required - experience;
+        return remaining > 0 ? remaining : 0;
+    }
 }

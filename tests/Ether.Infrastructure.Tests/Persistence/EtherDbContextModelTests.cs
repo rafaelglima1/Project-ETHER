@@ -1,5 +1,6 @@
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
+using Ether.Domain.Items;
 using Ether.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -28,15 +29,40 @@ public sealed class EtherDbContextModelTests
     }
 
     [Fact]
-    public void Model_maps_only_account_and_character()
+    public void Model_maps_the_implemented_entities()
     {
         var model = CreateModel();
 
         var entityTypes = model.GetEntityTypes().Select(entity => entity.ClrType).ToList();
 
-        Assert.Equal(2, entityTypes.Count);
+        Assert.Equal(3, entityTypes.Count);
         Assert.Contains(typeof(Account), entityTypes);
         Assert.Contains(typeof(Character), entityTypes);
+        Assert.Contains(typeof(ItemInstance), entityTypes);
+    }
+
+    [Fact]
+    public void Item_instance_is_mapped_to_expected_table_and_columns()
+    {
+        var item = CreateModel().FindEntityType(typeof(ItemInstance))!;
+        var storeObject = StoreObjectIdentifier.Table("item_instances", null);
+
+        Assert.Equal("item_instances", item.GetTableName());
+
+        var columns = item.GetProperties().Select(property => property.GetColumnName()).ToList();
+        Assert.Contains("id", columns);
+        Assert.Contains("definition_id", columns);
+        Assert.Contains("quantity", columns);
+        Assert.Contains("owner_character_id", columns);
+        Assert.Contains("location_type", columns);
+
+        Assert.Contains(
+            item.GetCheckConstraints().Select(constraint => constraint.GetName(storeObject)),
+            name => name == "ck_item_instances_quantity_positive");
+
+        var foreignKey = Assert.Single(item.GetForeignKeys());
+        Assert.Equal("characters", foreignKey.PrincipalEntityType.GetTableName());
+        Assert.Equal(DeleteBehavior.Restrict, foreignKey.DeleteBehavior);
     }
 
     [Fact]

@@ -16,8 +16,17 @@ public sealed record MovementMoveCommandPayload(int X, int Y);
 /// <summary>Payload of <see cref="ProtocolMessageNames.GameAuthenticated"/>.</summary>
 public sealed record AuthenticatedEventPayload(Guid SessionId, Guid AccountId, Guid CharacterId);
 
-/// <summary>Player state inside a world snapshot.</summary>
-public sealed record PlayerSnapshotPayload(Guid CharacterId, int X, int Y, string State);
+/// <summary>Player state inside a world snapshot (progression fields are additive, M7).</summary>
+public sealed record PlayerSnapshotPayload(
+    Guid CharacterId,
+    int X,
+    int Y,
+    string State,
+    int Level = 1,
+    long Experience = 0,
+    long ExperienceToNextLevel = 0,
+    int Health = 0,
+    int MaxHealth = 0);
 
 /// <summary>Creature state inside a world snapshot.</summary>
 public sealed record CreatureSnapshotPayload(

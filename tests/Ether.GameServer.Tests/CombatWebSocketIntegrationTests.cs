@@ -4,6 +4,8 @@ using System.Text;
 using Ether.Application.Abstractions;
 using Ether.Contracts.Realtime;
 using Ether.Domain.Combat;
+using Ether.Domain.Creatures;
+using Ether.Domain.World;
 using Ether.GameServer.Protocol;
 using Ether.GameServer.Tests.Fakes;
 
@@ -35,11 +37,13 @@ public sealed class CombatWebSocketIntegrationTests
                 services.RemoveAll<IAccountRepository>();
                 services.RemoveAll<ICharacterRepository>();
                 services.RemoveAll<IUnitOfWork>();
+                services.RemoveAll<IItemInstanceRepository>();
 
                 services.AddSingleton(persistence);
                 services.AddSingleton<IAccountRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
                 services.AddSingleton<ICharacterRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
                 services.AddSingleton<IUnitOfWork>(provider => provider.GetRequiredService<InMemoryPersistence>());
+                services.AddSingleton<IItemInstanceRepository>(provider => provider.GetRequiredService<InMemoryPersistence>());
             });
         });
     }
@@ -285,6 +289,87 @@ public sealed class CombatWebSocketIntegrationTests
         Assert.Equal(
             ProtocolErrorCodes.OutOfRange,
             Serializer.DeserializePayload<ProtocolErrorPayload>(rejected.Payload)!.Code);
+    }
+
+    [Fact]
+    public async Task Killing_a_creature_grants_experience_and_loot_once()
+    {
+        using var factory = CreateFactory();
+        using var timeout = new CancellationTokenSource(Timeout);
+
+        var persistence = factory.Services.GetRequiredService<InMemoryPersistence>();
+        var (account, character) = await persistence.SeedCharacterAsync("Hero");
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+
+        var (socket, _) = await ConnectEnterWithSnapshotAsync(
+            factory, tokenService.CreateGameToken(account, character.Value).Token, timeout.Token);
+        using var socketScope = socket;
+
+        // Seed a creature right next to the player (0,0) so the kill is deterministic.
+        var creatureWorld = factory.Services.GetRequiredService<ICreatureWorld>();
+        var slimeDefinition = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
+        var creature = new CreatureInstance(
+            CreatureInstanceId.New(),
+            slimeDefinition.Id,
+            new MapId(1),
+            new WorldPosition(new MapId(1), 1, 0),
+            slimeDefinition.MaxHealth);
+        creatureWorld.Add(creature);
+
+        Contracts.Combat.CombatResultResponse? final = null;
+        for (var sequence = 3; sequence <= 12 && final is null; sequence++)
+        {
+            await SendAsync(
+                socket,
+                ProtocolMessageNames.CombatAttack,
+                new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, creature.Id.Value, "creature"),
+                sequence,
+                timeout.Token);
+
+            var response = await ReceiveAsync(socket, timeout.Token);
+            if (response.Type == ProtocolMessageTypes.Error)
+            {
+                continue;
+            }
+
+            var payload = Serializer.DeserializePayload<Contracts.Combat.CombatResultResponse>(response.Payload)!;
+            if (payload.TargetDefeated)
+            {
+                final = payload;
+            }
+        }
+
+        Assert.NotNull(final);
+        Assert.Equal(slimeDefinition.ExperienceReward, final!.ExperienceGained);
+
+        var stored = await persistence.GetByIdAsync(character, timeout.Token);
+        Assert.Equal(slimeDefinition.ExperienceReward, stored!.Experience);
+
+        // Loot is random, but whatever was reported must be persisted for the owner.
+        var items = await persistence.GetItemsByOwnerAsync(character, timeout.Token);
+        var reported = final.Loot?.Sum(loot => loot.Quantity) ?? 0;
+        Assert.Equal(reported, items.Sum(item => item.Quantity));
+    }
+
+    [Fact]
+    public async Task World_snapshot_includes_progression()
+    {
+        using var factory = CreateFactory();
+        using var timeout = new CancellationTokenSource(Timeout);
+
+        var persistence = factory.Services.GetRequiredService<InMemoryPersistence>();
+        var (account, character) = await persistence.SeedCharacterAsync("Hero");
+        var tokenService = factory.Services.GetRequiredService<ITokenService>();
+
+        var (socket, snapshot) = await ConnectEnterWithSnapshotAsync(
+            factory, tokenService.CreateGameToken(account, character.Value).Token, timeout.Token);
+        using var socketScope = socket;
+
+        Assert.Equal(1, snapshot.Player.Level);
+        Assert.Equal(0, snapshot.Player.Experience);
+        Assert.True(snapshot.Player.ExperienceToNextLevel > 0);
+        Assert.True(snapshot.Player.MaxHealth > 0);
+        Assert.Equal(snapshot.Player.MaxHealth, snapshot.Player.Health);
     }
 
     [Fact]

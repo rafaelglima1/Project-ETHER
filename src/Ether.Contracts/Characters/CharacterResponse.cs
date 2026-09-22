@@ -17,4 +17,7 @@ public sealed record CharacterResponse(
     int PositionX,
     int PositionY,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    int Health = 0,
+    int MaxHealth = 0,
+    long ExperienceToNextLevel = 0);
