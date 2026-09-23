@@ -11,11 +11,15 @@ var game: Node = null
 var world_state: WorldState
 var input_controller: InputController
 var camera: CameraController
+var joystick: MoveStick
 var tile_size := 32
 
 const HUD_SCENE := preload("res://scenes/ui/hud.tscn")
 
+var _hud: CanvasLayer
 var _views: Dictionary = {}
+var _tap_marker := Vector2i(-99, -99)
+var _tap_marker_time := 0.0
 
 
 func _ready() -> void:
@@ -38,7 +42,15 @@ func _ready() -> void:
 	camera.name = "Camera"
 	add_child(camera)
 
-	add_child(HUD_SCENE.instantiate())
+	_hud = HUD_SCENE.instantiate()
+	add_child(_hud)
+
+	# Virtual stick lives on the HUD layer (bottom-left) so it renders above the
+	# world and never blocks the action bar / HUD panels.
+	joystick = MoveStick.new()
+	joystick.name = "MoveStick"
+	_hud.add_child(joystick)
+	joystick.direction_changed.connect(_on_joystick)
 
 	world_state.entity_upserted.connect(_on_entity_upserted)
 	world_state.entity_removed.connect(_on_entity_removed)
@@ -123,12 +135,28 @@ func _player_view_node() -> Node2D:
 
 # --- Input --------------------------------------------------------------------
 
+func _on_joystick(direction: Vector2) -> void:
+	input_controller.set_joystick(direction)
+
+
+func _process(delta: float) -> void:
+	if _tap_marker_time > 0.0:
+		_tap_marker_time -= delta
+		queue_redraw()
+
+
 func _on_pointer_pressed(screen_position: Vector2) -> void:
 	if world_state.map.is_empty() or game == null:
 		return
 
 	var world_position := get_canvas_transform().affine_inverse() * screen_position
 	var tile := Vector2i(int(floor(world_position.x / tile_size)), int(floor(world_position.y / tile_size)))
+
+	# Immediate, non-authoritative feedback: mark where the player tapped.
+	_tap_marker = tile
+	_tap_marker_time = 0.5
+	queue_redraw()
+
 	var creature_id := world_state.creature_at(tile.x, tile.y)
 
 	if creature_id != "":
@@ -140,7 +168,6 @@ func _on_pointer_pressed(screen_position: Vector2) -> void:
 	else:
 		game.clear_target()
 		game.request_move(tile.x, tile.y)
-	queue_redraw()
 
 
 func _on_move_step(direction: Vector2i) -> void:
@@ -188,3 +215,9 @@ func _draw() -> void:
 		draw_rect(
 			Rect2(Vector2(tile.x * tile_size, tile.y * tile_size), Vector2(tile_size, tile_size)),
 			Color(1.0, 0.85, 0.2, 0.6), false, 2.0)
+
+	if _tap_marker_time > 0.0:
+		var origin := Vector2(_tap_marker.x * tile_size, _tap_marker.y * tile_size)
+		var alpha := clampf(_tap_marker_time / 0.5, 0.0, 1.0)
+		draw_rect(Rect2(origin, Vector2(tile_size, tile_size)), Color(0.55, 0.85, 1.0, 0.30 * alpha), true)
+		draw_rect(Rect2(origin, Vector2(tile_size, tile_size)), Color(0.70, 0.92, 1.0, 0.9 * alpha), false, 2.0)

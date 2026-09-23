@@ -84,16 +84,24 @@ func _draw() -> void:
 	var body := _body_color
 	if dead:
 		body = body.darkened(0.6)
-	draw_circle(Vector2.ZERO, _radius, body)
-	draw_arc(Vector2.ZERO, _radius, 0.0, TAU, 24, body.darkened(0.5), 2.0)
+
+	if entity_kind == "player":
+		# The player is the one thing that must never be lost on screen: a bright
+		# body inside a white halo so it reads against any placeholder background.
+		draw_circle(Vector2.ZERO, _radius + 4.0, Color(1.0, 1.0, 1.0, 0.9))
+		draw_circle(Vector2.ZERO, _radius, body)
+		draw_arc(Vector2.ZERO, _radius, 0.0, TAU, 24, Color(0.05, 0.30, 0.55), 3.0)
+	else:
+		draw_circle(Vector2.ZERO, _radius, body)
+		draw_arc(Vector2.ZERO, _radius, 0.0, TAU, 24, body.darkened(0.5), 2.0)
 
 	if selected:
-		draw_arc(Vector2.ZERO, _radius + 5.0, 0.0, TAU, 28, Color(1.0, 0.85, 0.2), 2.0)
+		draw_arc(Vector2.ZERO, _radius + 6.0, 0.0, TAU, 28, Color(1.0, 0.85, 0.2), 3.0)
 
 	if max_hp > 0 and hp < max_hp:
 		var bar_width := _radius * 2.4
 		var ratio := clampf(float(hp) / float(max_hp), 0.0, 1.0)
-		var origin := Vector2(-bar_width * 0.5, -_radius - 8.0)
+		var origin := Vector2(-bar_width * 0.5, -_radius - 9.0)
 		draw_rect(Rect2(origin, Vector2(bar_width, 4.0)), Color(0.1, 0.1, 0.12, 0.9), true)
 		draw_rect(Rect2(origin, Vector2(bar_width * ratio, 4.0)), Color(0.35, 0.85, 0.4), true)
 

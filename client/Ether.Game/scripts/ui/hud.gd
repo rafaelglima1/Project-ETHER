@@ -133,7 +133,21 @@ func _build() -> void:
 	_feedback_label.offset_top = -44.0
 	_feedback_label.offset_right = 760.0
 	_feedback_label.offset_bottom = -16.0
+	_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_feedback_label)
+
+	var move_hint := Label.new()
+	move_hint.text = "Drag the stick to move  |  Tap the map"
+	move_hint.anchor_top = 1.0
+	move_hint.anchor_bottom = 1.0
+	move_hint.offset_left = 30.0
+	move_hint.offset_top = -268.0
+	move_hint.offset_right = 420.0
+	move_hint.offset_bottom = -244.0
+	move_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	move_hint.add_theme_font_size_override("font_size", 14)
+	move_hint.modulate = Color(0.75, 0.82, 0.92)
+	root.add_child(move_hint)
 
 
 func _on_attack() -> void:

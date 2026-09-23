@@ -6,5 +6,5 @@ extends EntityView
 
 func _init() -> void:
 	entity_kind = "player"
-	_radius = 13.0
+	_radius = 15.0
 	interpolation_speed = 14.0

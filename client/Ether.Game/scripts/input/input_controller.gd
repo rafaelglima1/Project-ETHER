@@ -11,6 +11,13 @@ signal cancel_pressed
 
 var _move_accumulator := 0.0
 var _move_interval := 0.18
+var _joystick := Vector2.ZERO
+
+
+## Latest virtual-stick direction (magnitude 0..1). Set by the on-screen
+## joystick; keyboard WASD/arrows also feed movement for desktop development.
+func set_joystick(direction: Vector2) -> void:
+	_joystick = direction
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -38,6 +45,16 @@ func _process(delta: float) -> void:
 		direction.x -= 1
 	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
 		direction.x += 1
+
+	if direction == Vector2i.ZERO and _joystick != Vector2.ZERO:
+		if _joystick.x > 0.3:
+			direction.x = 1
+		elif _joystick.x < -0.3:
+			direction.x = -1
+		if _joystick.y > 0.3:
+			direction.y = 1
+		elif _joystick.y < -0.3:
+			direction.y = -1
 
 	if direction != Vector2i.ZERO:
 		_move_accumulator = 0.0

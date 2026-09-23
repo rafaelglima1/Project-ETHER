@@ -17,6 +17,7 @@ const SUITES := [
 	preload("res://tests/test_client_robustness.gd"),
 	preload("res://tests/test_progression.gd"),
 	preload("res://tests/test_character_flow.gd"),
+	preload("res://tests/test_movement_input.gd"),
 	preload("res://tests/test_mock_playable.gd"),
 ]
 
@@ -27,6 +28,10 @@ func _initialize() -> void:
 	var failed := 0
 
 	for suite_script in SUITES:
+		if not suite_script.can_instantiate():
+			print("SKIP  %s (did not compile)" % suite_script.resource_path.get_file())
+			failed += 1
+			continue
 		var suite: TestCase = suite_script.new()
 		for method in _test_methods(suite):
 			suite.failures.clear()
