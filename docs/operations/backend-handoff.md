@@ -43,6 +43,7 @@
   formulas. Do not invent item values or formulas.
 - Death penalty remains `PRODUCT_DECISION_REQUIRED` per ADR-0001 D5; it does not block
   content work or determine the equipment stat contract.
-- The ETHER Engineering Constitution was not present in the repository or searched
-  workspace. Blueprint v5.0 and ADRs supplied the available engineering rules.
+- Permanent engineering rules and autonomous workflow are now recorded in
+  `docs/engineering/ETHER-ENGINEERING-CONSTITUTION.md` and
+  `docs/engineering/ETHER-AUTONOMOUS-ENGINEERING-PROTOCOL-V2.md`.
 - Client worktree changes owned by OPENCODE-2 were left untouched and unstaged.
