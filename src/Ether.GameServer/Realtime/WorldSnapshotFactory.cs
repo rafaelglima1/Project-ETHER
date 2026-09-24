@@ -53,7 +53,7 @@ public sealed class WorldSnapshotFactory
         var characterId = new Ether.Domain.Characters.CharacterId(character.CharacterId);
         var inventory = await _inventory.GetInventoryAsync(characterId, cancellationToken).ConfigureAwait(false);
 
-        _logger.LogDebug("Snapshot inventory for {CharacterId}: {Count} items", characterId.Value, inventory.Count);
+        _logger.LogInformation("Snapshot inventory for {CharacterId}: {Count} items", characterId.Value, inventory.Count);
 
         var inventoryItems = inventory
             .Select(item => new InventoryItemResponse(
