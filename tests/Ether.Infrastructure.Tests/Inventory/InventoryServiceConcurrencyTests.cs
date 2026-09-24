@@ -12,6 +12,9 @@ namespace Ether.Infrastructure.Tests.Inventory;
 
 public sealed class InventoryServiceConcurrencyTests
 {
+    private static readonly ItemDefinition SlimeGel = new(
+        new ItemDefinitionId("item.slime_gel"), "Slime Gel", ItemCategory.Material, stackable: true, maxStack: 100, baseValue: 2);
+
     [Fact]
     public async Task Concurrent_direct_additions_merge_without_lost_quantity()
     {
@@ -21,12 +24,12 @@ public sealed class InventoryServiceConcurrencyTests
         var service = CreateService(repository, locks, maxSlots: 2);
 
         await Task.WhenAll(Enumerable.Range(0, 16).Select(_ =>
-            service.AddLootAsync(owner, ItemCatalog.Get(ItemCatalog.SlimeGel), 1, CancellationToken.None)));
+            service.AddLootAsync(owner, SlimeGel, 1, CancellationToken.None)));
 
         var items = await repository.GetByOwnerAsync(owner, CancellationToken.None);
         var item = Assert.Single(items);
         Assert.Equal(16, item.Quantity);
-        Assert.InRange(item.Quantity, 1, ItemCatalog.Get(ItemCatalog.SlimeGel).MaxStack);
+        Assert.InRange(item.Quantity, 1, SlimeGel.MaxStack);
     }
 
     [Fact]
@@ -40,7 +43,7 @@ public sealed class InventoryServiceConcurrencyTests
         await using var combatLease = await locks.AcquireAsync([owner.Value, Guid.NewGuid()], CancellationToken.None);
         var added = await service.AddLootAsync(
                 owner,
-                ItemCatalog.Get(ItemCatalog.SlimeGel),
+                SlimeGel,
                 1,
                 CancellationToken.None,
                 combatLease)
@@ -91,10 +94,10 @@ public sealed class InventoryServiceConcurrencyTests
         var locks = new InMemoryEntityLockProvider();
         var service = CreateService(repository, locks, maxSlots: 2);
         await repository.AddAsync(
-            ItemInstance.CreateLoot(ItemCatalog.Get(ItemCatalog.SlimeGel), 50, owner),
+            ItemInstance.CreateLoot(SlimeGel, 50, owner),
             CancellationToken.None);
 
-        await service.AddLootAsync(owner, ItemCatalog.Get(ItemCatalog.SlimeGel), 150, CancellationToken.None);
+        await service.AddLootAsync(owner, SlimeGel, 150, CancellationToken.None);
 
         var items = await repository.GetByOwnerAsync(owner, CancellationToken.None);
         Assert.Equal(2, items.Count);
@@ -109,7 +112,7 @@ public sealed class InventoryServiceConcurrencyTests
         var service = CreateService(repository, new InMemoryEntityLockProvider(), maxSlots: 1);
 
         await Assert.ThrowsAsync<InventoryFullException>(() =>
-            service.AddLootAsync(owner, ItemCatalog.Get(ItemCatalog.SlimeGel), 101, CancellationToken.None));
+            service.AddLootAsync(owner, SlimeGel, 101, CancellationToken.None));
 
         Assert.Empty(await repository.GetByOwnerAsync(owner, CancellationToken.None));
     }

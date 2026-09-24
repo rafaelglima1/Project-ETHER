@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-ether.invalid/content/schemas/creature-spawns.schema.json",
+  "title": "Creature spawn points",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["mapId", "x", "y", "creatureId"],
+    "properties": {
+      "mapId": { "type": "integer", "minimum": 1 },
+      "x": { "type": "integer", "minimum": 0 },
+      "y": { "type": "integer", "minimum": 0 },
+      "creatureId": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "creature.slime",
+    "name": "Slime",
+    "level": 1,
+    "maxHealth": 30,
+    "attackPower": 5,
+    "armor": 1,
+    "moveSpeed": 1,
+    "aggroRange": 6,
+    "attackRange": 1,
+    "attackCooldownMilliseconds": 2000,
+    "leashRange": 10,
+    "respawnDelayMilliseconds": 30000,
+    "experienceReward": 12,
+    "resistances": []
+  },
+  {
+    "id": "creature.wolf",
+    "name": "Wolf",
+    "level": 2,
+    "maxHealth": 45,
+    "attackPower": 8,
+    "armor": 2,
+    "moveSpeed": 2,
+    "aggroRange": 8,
+    "attackRange": 1,
+    "attackCooldownMilliseconds": 1500,
+    "leashRange": 14,
+    "respawnDelayMilliseconds": 45000,
+    "experienceReward": 25,
+    "resistances": []
+  },
+  {
+    "id": "creature.spider",
+    "name": "Spider",
+    "level": 2,
+    "maxHealth": 35,
+    "attackPower": 7,
+    "armor": 1,
+    "moveSpeed": 2,
+    "aggroRange": 7,
+    "attackRange": 2,
+    "attackCooldownMilliseconds": 2000,
+    "leashRange": 12,
+    "respawnDelayMilliseconds": 40000,
+    "experienceReward": 22,
+    "resistances": []
+  }
+]

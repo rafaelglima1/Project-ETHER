@@ -46,7 +46,7 @@ client-provided id.
 
 ## Decision — loot is content + injected randomness
 
-Loot tables are content (`LootTableCatalog`, keyed by creature definition id) with
+Loot tables are content (`content/loot-tables/loot-tables.json`, keyed by creature definition id) with
 `LootEntry(item, chance, min, max)`. `LootRoller.Roll(table, IRandomSource)` is a
 pure function: one draw for the chance, one for the quantity. Randomness stays
 behind `IRandomSource`, so tests use a scripted sequence and production uses
@@ -54,7 +54,7 @@ behind `IRandomSource`, so tests use a scripted sequence and production uses
 
 ## Decision — minimal item/inventory foundation
 
-`ItemDefinitionId`, `ItemDefinition`, `ItemCatalog`, `ItemInstance` and
+`ItemDefinitionId`, `ItemDefinition`, the JSON item catalog, `ItemInstance` and
 `ItemLocation` form the canonical item foundation (no parallel systems). Items are
 created **only** through `ItemInstance.CreateLoot` (server-side loot) for M7.
 Persistence is a single `item_instances` table (id, definition_id, quantity,

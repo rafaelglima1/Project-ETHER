@@ -2,7 +2,6 @@ using Ether.Application.Abstractions;
 using Ether.Contracts.Characters;
 using Ether.Domain.Accounts;
 using Ether.Domain.Characters;
-using Ether.Domain.Items;
 
 namespace Ether.Application.Inventory;
 
@@ -10,10 +9,12 @@ namespace Ether.Application.Inventory;
 public sealed class GetInventoryHandler
 {
     private readonly IInventoryService _inventory;
+    private readonly IItemCatalog _items;
 
-    public GetInventoryHandler(IInventoryService inventory)
+    public GetInventoryHandler(IInventoryService inventory, IItemCatalog items)
     {
         _inventory = inventory;
+        _items = items;
     }
 
     public async Task<InventoryResponse> HandleAsync(
@@ -25,12 +26,16 @@ public sealed class GetInventoryHandler
 
         return new InventoryResponse(
             characterId.Value,
-            items.Select(item => new InventoryItemResponse(
-                item.DefinitionId.Value,
-                ItemCatalog.Get(item.DefinitionId).Name,
-                item.Quantity,
-                ItemCatalog.Get(item.DefinitionId).MaxStack,
-                ItemCatalog.Get(item.DefinitionId).Stackable,
-                item.Location.ToString())).ToList());
+            items.Select(item =>
+            {
+                var definition = _items.Get(item.DefinitionId);
+                return new InventoryItemResponse(
+                    item.DefinitionId.Value,
+                    definition.Name,
+                    item.Quantity,
+                    definition.MaxStack,
+                    definition.Stackable,
+                    item.Location.ToString());
+            }).ToList());
     }
 }

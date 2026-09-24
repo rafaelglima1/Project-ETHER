@@ -11,10 +11,14 @@ namespace Ether.Application.Creatures;
 public sealed class CreatureSpawnService
 {
     private readonly ICreatureWorld _world;
+    private readonly ICreatureSpawnCatalog _spawns;
+    private readonly ICreatureCatalog _creatures;
 
-    public CreatureSpawnService(ICreatureWorld world)
+    public CreatureSpawnService(ICreatureWorld world, ICreatureSpawnCatalog spawns, ICreatureCatalog creatures)
     {
         _world = world;
+        _spawns = spawns;
+        _creatures = creatures;
     }
 
     public void EnsureSpawned(MapId mapId)
@@ -24,7 +28,7 @@ public sealed class CreatureSpawnService
             .Select(creature => (creature.DefinitionId, creature.SpawnPositionX, creature.SpawnPositionY))
             .ToHashSet();
 
-        foreach (var spawn in CreatureSpawnCatalog.ForMap(mapId))
+        foreach (var spawn in _spawns.ForMap(mapId))
         {
             var key = (spawn.DefinitionId, spawn.X, spawn.Y);
             if (occupied.Contains(key))
@@ -32,8 +36,8 @@ public sealed class CreatureSpawnService
                 continue;
             }
 
-            var definition = CreatureCatalog.Get(spawn.DefinitionId);
-            var position = new WorldPosition(mapId, spawn.X, spawn.Y);
+            var definition = _creatures.Get(spawn.DefinitionId);
+            var position = new WorldPosition(spawn.MapId, spawn.X, spawn.Y);
 
             _world.Add(new CreatureInstance(
                 CreatureInstanceId.New(),

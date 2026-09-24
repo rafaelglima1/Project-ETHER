@@ -23,6 +23,9 @@ public sealed class AttackCreatureCommandHandler
     private readonly ICreatureWorld _creatures;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICombatStatsProvider _stats;
+    private readonly IAbilityCatalog _abilities;
+    private readonly ICreatureCatalog _creatureCatalog;
+    private readonly IItemCatalog _itemCatalog;
     private readonly IAbilityCooldownStore _cooldowns;
     private readonly IEntityLockProvider _locks;
     private readonly IRandomSource _random;
@@ -35,6 +38,9 @@ public sealed class AttackCreatureCommandHandler
         ICreatureWorld creatures,
         IUnitOfWork unitOfWork,
         ICombatStatsProvider stats,
+        IAbilityCatalog abilities,
+        ICreatureCatalog creatureCatalog,
+        IItemCatalog itemCatalog,
         IAbilityCooldownStore cooldowns,
         IEntityLockProvider locks,
         IRandomSource random,
@@ -48,6 +54,9 @@ public sealed class AttackCreatureCommandHandler
         _creatures = creatures;
         _unitOfWork = unitOfWork;
         _stats = stats;
+        _abilities = abilities;
+        _creatureCatalog = creatureCatalog;
+        _itemCatalog = itemCatalog;
         _cooldowns = cooldowns;
         _locks = locks;
         _random = random;
@@ -63,7 +72,7 @@ public sealed class AttackCreatureCommandHandler
         CreatureInstanceId targetId,
         CancellationToken cancellationToken)
     {
-        if (!AbilityCatalog.TryGet(abilityId, out var ability))
+        if (!_abilities.TryGet(abilityId, out var ability))
         {
             throw new Exceptions.CombatRejectedException(
                 Exceptions.CombatRejectionReason.AbilityNotFound,
@@ -124,7 +133,7 @@ public sealed class AttackCreatureCommandHandler
         _cooldowns.Record(attackerId.Value, ability.Id, ability.Cooldown, now);
         attacker.EnterCombat(now);
 
-        var definition = CreatureCatalog.Get(creature.DefinitionId);
+        var definition = _creatureCatalog.Get(creature.DefinitionId);
         var rules = new DamageRules(_options.MinimumDamage, _options.ResistanceCap);
         var damage = DamageCalculator.Calculate(
             _stats.For(attacker),
@@ -166,7 +175,7 @@ public sealed class AttackCreatureCommandHandler
                 : reward.Items
                     .Select(item => new LootItemPayload(
                         item.DefinitionId.Value,
-                        ItemCatalog.Get(item.DefinitionId).Name,
+                        _itemCatalog.Get(item.DefinitionId).Name,
                         item.Quantity,
                         item.Id.Value))
                     .ToList());

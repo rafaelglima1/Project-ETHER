@@ -3,7 +3,7 @@ namespace Ether.Contracts.Configuration;
 /// <summary>
 /// Binds the <c>Character</c> configuration section.
 /// Defines the server-authoritative starting position used when a character is
-/// created, until the world/content milestone introduces real spawn definitions.
+/// created; infrastructure validates that it exists in the loaded map content.
 /// </summary>
 public sealed class CharacterOptions
 {

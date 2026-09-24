@@ -12,11 +12,11 @@ The current technical contract is **Blueprint v5.0**.
 
 ## Status
 
-**Milestone M0 — Foundation.**
-
-M0–M7 are complete. The next work item is the inventory foundation (capacity,
-stacking, equipment). See
-[`docs/decisions/`](docs/decisions) for ADR-0001…ADR-0006.
+**Backend status:** M0–M8 are complete, and the canonical content pipeline
+(ETHER-039) is implemented. The next equipment task is held at a documented
+specification gap rather than inventing item stat rules. See the backend handoff
+([`docs/operations/backend-handoff.md`](docs/operations/backend-handoff.md)) and
+[`docs/decisions/`](docs/decisions) for current details.
 
 | Milestone | Scope | Status |
 | --- | --- | --- |
@@ -28,7 +28,9 @@ stacking, equipment). See
 | M5 | Combat foundation (server-authoritative attack, damage, HP) | ✅ Done |
 | M6 | Creatures + AI (spawns, chase/attack/return, respawn) | ✅ Done |
 | M7 | Progression (XP) + loot + item foundation | ✅ Done |
-| M8 | Inventory (capacity, stacking, equipment) | ⏭ Next |
+| M8 | Inventory (authoritative ownership, capacity, stacking) | ✅ Done |
+| ETHER-039 | Content pipeline and validator for implemented gameplay content | ✅ Done |
+| ETHER-021 | Equipment | ⏸ Spec gap — item modifiers and attribute/combat mapping are undefined |
 
 
 ### Realtime (GameServer WebSocket)
@@ -130,7 +132,8 @@ tests/
 docs/
   blueprints/             product/technical blueprints (v1.0–v5.0)
   decisions/              architecture decision records (ADRs)
-client/                   Godot client (future milestone)
+content/                  versioned gameplay content + JSON schemas
+client/                   Godot client
 ```
 
 ## Environments
@@ -219,6 +222,7 @@ Accounts and characters (all require a Bearer **access** token):
 | `POST` | `/characters/{characterId}/enter` | Enter the world → `200` |
 | `POST` | `/characters/{characterId}/move` | Move (server-validated) → `200` |
 | `POST` | `/characters/{characterId}/game-token` | Issue a game token → `200` |
+| `GET` | `/characters/{characterId}/inventory` | Read owned inventory → `200` |
 
 Rules and status codes:
 
@@ -235,11 +239,14 @@ Rules and status codes:
 `POST /characters/{characterId}/game-token` returns a short-lived JWT
 (`Authentication:GameTokenLifetimeMinutes`, default 5) whose claims carry
 `accountId` and `characterId` with `use=game`. It is the credential the
-**GameServer WebSocket** will consume. The WebSocket endpoint itself is not
-implemented yet.
+**GameServer WebSocket** consumes at `/game`; the authenticated session provides
+the character identity used by realtime commands and snapshots. See ADR-0003 for
+the frozen envelope and session contract.
 
-Persistence is PostgreSQL; migrations are `InitialAccountCharacter` and
-`AddAccountCredentials`.
+Persistence is PostgreSQL; migrations are in
+`src/Ether.Infrastructure/Migrations` (`InitialAccountCharacter`,
+`AddAccountCredentials`, `AddCharacterCombatStats`, `AddItemInstances`). ETHER-039
+changes no database schema.
 
 Apply migrations (script-based, controlled — no automatic migration at runtime):
 
@@ -283,6 +290,7 @@ Configuration is bound from environment variables (double underscore for nesting
 | `AuthenticationOptions` | `Authentication` | JWT signing key, token lifetimes |
 | `WebSocketOptions` | `WebSocket` | Gameplay endpoint path, heartbeat |
 | `GameServerOptions` | `GameServer` | Tick rates, interest radius, grace period |
+| `ContentOptions` | `Content` | Content bundle root directory (`content` by default) |
 
 Example:
 

@@ -23,8 +23,8 @@ public sealed class KillRewardServiceTests
     public async Task Grants_creature_experience()
     {
         var items = new FakeInventoryService();
-        var service = new KillRewardService(items, new SequencedRandomSource(0.0, 0.0), TimeProvider.System);
-        var definition = CreatureCatalog.Get(SlimeId);
+        var service = CreateService(items, new SequencedRandomSource(0.0, 0.0));
+        var definition = TestGameContentCatalog.Instance.Get(SlimeId);
         var killer = Killer();
 
         var reward = await service.GrantAsync(killer, definition, CancellationToken.None);
@@ -39,14 +39,14 @@ public sealed class KillRewardServiceTests
     {
         var items = new FakeInventoryService();
         // chance 0.1 (< 0.8) then quantity 0.0 → 1 slime gel.
-        var service = new KillRewardService(items, new SequencedRandomSource(0.1, 0.0), TimeProvider.System);
-        var definition = CreatureCatalog.Get(SlimeId);
+        var service = CreateService(items, new SequencedRandomSource(0.1, 0.0));
+        var definition = TestGameContentCatalog.Instance.Get(SlimeId);
         var killer = Killer();
 
         var reward = await service.GrantAsync(killer, definition, CancellationToken.None);
 
         var drop = Assert.Single(reward.Items);
-        Assert.Equal(ItemCatalog.SlimeGel, drop.DefinitionId);
+        Assert.Equal(TestGameContentCatalog.SlimeGel.Id, drop.DefinitionId);
         Assert.Equal(killer.Id, drop.OwnerCharacterId);
         Assert.Equal(ItemLocation.Inventory, drop.Location);
         Assert.Single(items.All);
@@ -56,9 +56,9 @@ public sealed class KillRewardServiceTests
     public async Task No_loot_when_the_roll_misses()
     {
         var items = new FakeInventoryService();
-        var service = new KillRewardService(items, new SequencedRandomSource(0.99), TimeProvider.System);
+        var service = CreateService(items, new SequencedRandomSource(0.99));
 
-        var reward = await service.GrantAsync(Killer(), CreatureCatalog.Get(SlimeId), CancellationToken.None);
+        var reward = await service.GrantAsync(Killer(), TestGameContentCatalog.Instance.Get(SlimeId), CancellationToken.None);
 
         Assert.Empty(reward.Items);
         Assert.Empty(items.All);
@@ -68,14 +68,14 @@ public sealed class KillRewardServiceTests
     public async Task Level_up_is_reported()
     {
         var items = new FakeInventoryService();
-        var service = new KillRewardService(items, new SequencedRandomSource(0.99), TimeProvider.System);
+        var service = CreateService(items, new SequencedRandomSource(0.99));
         var killer = Killer();
 
         // Give almost enough XP for level 2 first.
         var required = Ether.Domain.Progression.ExperienceCurve.ExperienceToAdvanceFrom(1);
         killer.GrantExperience(required - 1, DateTimeOffset.UtcNow);
 
-        var reward = await service.GrantAsync(killer, CreatureCatalog.Get(SlimeId), CancellationToken.None);
+        var reward = await service.GrantAsync(killer, TestGameContentCatalog.Instance.Get(SlimeId), CancellationToken.None);
 
         Assert.Equal(1, reward.LevelsGained);
         Assert.Equal(2, reward.Level);
@@ -85,7 +85,7 @@ public sealed class KillRewardServiceTests
     public async Task Creature_without_a_loot_table_drops_nothing()
     {
         var items = new FakeInventoryService();
-        var service = new KillRewardService(items, new SequencedRandomSource(0.0, 0.0), TimeProvider.System);
+        var service = CreateService(items, new SequencedRandomSource(0.0, 0.0));
 
         var definition = new CreatureDefinition(
             new CreatureDefinitionId("creature.test"),
@@ -107,4 +107,7 @@ public sealed class KillRewardServiceTests
 
         Assert.Empty(reward.Items);
     }
+
+    private static KillRewardService CreateService(FakeInventoryService inventory, IRandomSource random) =>
+        new(inventory, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance, random, TimeProvider.System);
 }

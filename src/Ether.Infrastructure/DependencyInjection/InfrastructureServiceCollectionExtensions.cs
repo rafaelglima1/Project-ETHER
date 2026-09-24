@@ -3,6 +3,7 @@ using Ether.Contracts.Configuration;
 using Ether.Infrastructure.Accounts;
 using Ether.Infrastructure.Authentication;
 using Ether.Infrastructure.Characters;
+using Ether.Infrastructure.Content;
 using Ether.Infrastructure.Dependencies;
 using Ether.Infrastructure.Items;
 using Ether.Infrastructure.Memory;
@@ -10,7 +11,6 @@ using Ether.Infrastructure.Persistence;
 using Ether.Infrastructure.Random;
 using Ether.Infrastructure.Redis;
 using Ether.Infrastructure.Security;
-using Ether.Infrastructure.World;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -51,6 +51,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<WorldOptions>(configuration.GetSection(WorldOptions.SectionName));
         services.Configure<CombatOptions>(configuration.GetSection(CombatOptions.SectionName));
         services.Configure<InventoryOptions>(configuration.GetSection(InventoryOptions.SectionName));
+        services.Configure<ContentOptions>(configuration.GetSection(ContentOptions.SectionName));
 
         // Authentication options are validated at startup: in Production a usable
         // signing key is mandatory and the development placeholder is rejected.
@@ -93,7 +94,14 @@ public static class InfrastructureServiceCollectionExtensions
         // Security services (M2).
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<ITokenService, JwtTokenService>();
-        services.AddSingleton<IWorldMapProvider, StaticWorldMapProvider>();
+        services.AddSingleton<JsonGameContentCatalog>();
+        services.AddSingleton<IAbilityCatalog>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddSingleton<ICreatureCatalog>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddSingleton<ICreatureSpawnCatalog>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddSingleton<IItemCatalog>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddSingleton<ILootTableCatalog>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddSingleton<IWorldMapProvider>(provider => provider.GetRequiredService<JsonGameContentCatalog>());
+        services.AddHostedService<GameContentValidationHostedService>();
 
         // Combat runtime coordination (M5): process-local cooldowns, entity locks and RNG.
         services.AddSingleton<IAbilityCooldownStore, InMemoryAbilityCooldownStore>();

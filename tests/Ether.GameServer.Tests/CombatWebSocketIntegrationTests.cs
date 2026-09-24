@@ -138,7 +138,7 @@ public sealed class CombatWebSocketIntegrationTests
         await SendAsync(
             socket,
             ProtocolMessageNames.CombatAttack,
-            new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, targetId.Value),
+            new AttackCommandPayload("warrior.basic_attack", targetId.Value),
             3,
             timeout.Token);
 
@@ -173,11 +173,11 @@ public sealed class CombatWebSocketIntegrationTests
         var unknown = await ReceiveAsync(socket, timeout.Token);
         Assert.Equal(ProtocolErrorCodes.AbilityNotFound, Serializer.DeserializePayload<ProtocolErrorPayload>(unknown.Payload)!.Code);
 
-        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload(AbilityCatalog.PowerStrike.Value, targetId.Value), 4, timeout.Token);
+        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload("warrior.power_strike", targetId.Value), 4, timeout.Token);
         var first = await ReceiveAsync(socket, timeout.Token);
         Assert.Equal(ProtocolMessageNames.CombatResult, first.Name);
 
-        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload(AbilityCatalog.PowerStrike.Value, targetId.Value), 5, timeout.Token);
+        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload("warrior.power_strike", targetId.Value), 5, timeout.Token);
         var cooldown = await ReceiveAsync(socket, timeout.Token);
         Assert.Equal(ProtocolErrorCodes.CooldownActive, Serializer.DeserializePayload<ProtocolErrorPayload>(cooldown.Payload)!.Code);
     }
@@ -198,8 +198,8 @@ public sealed class CombatWebSocketIntegrationTests
         using var socketA = await ConnectAndEnterWorldAsync(factory, tokenService.CreateGameToken(accountA, characterA.Value).Token, timeout.Token);
         using var socketB = await ConnectAndEnterWorldAsync(factory, tokenService.CreateGameToken(accountB, characterB.Value).Token, timeout.Token);
 
-        var attackA = SendAsync(socketA, ProtocolMessageNames.CombatAttack, new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, targetId.Value), 3, timeout.Token);
-        var attackB = SendAsync(socketB, ProtocolMessageNames.CombatAttack, new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, targetId.Value), 3, timeout.Token);
+        var attackA = SendAsync(socketA, ProtocolMessageNames.CombatAttack, new AttackCommandPayload("warrior.basic_attack", targetId.Value), 3, timeout.Token);
+        var attackB = SendAsync(socketB, ProtocolMessageNames.CombatAttack, new AttackCommandPayload("warrior.basic_attack", targetId.Value), 3, timeout.Token);
         await Task.WhenAll(attackA, attackB);
 
         var resultA = Serializer.DeserializePayload<Contracts.Combat.CombatResultResponse>((await ReceiveAsync(socketA, timeout.Token)).Payload)!;
@@ -223,7 +223,7 @@ public sealed class CombatWebSocketIntegrationTests
         var tokenService = factory.Services.GetRequiredService<ITokenService>();
         using var socket = await ConnectAndEnterWorldAsync(factory, tokenService.CreateGameToken(accountA, characterA.Value).Token, timeout.Token);
 
-        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, characterB.Value), 3, timeout.Token);
+        await SendAsync(socket, ProtocolMessageNames.CombatAttack, new AttackCommandPayload("warrior.basic_attack", characterB.Value), 3, timeout.Token);
         var result = await ReceiveAsync(socket, timeout.Token);
 
         var payload = Serializer.DeserializePayload<Contracts.Combat.CombatResultResponse>(result.Payload)!;
@@ -277,7 +277,7 @@ public sealed class CombatWebSocketIntegrationTests
         await SendAsync(
             socket,
             ProtocolMessageNames.CombatAttack,
-            new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, farthest.CreatureId, "creature"),
+            new AttackCommandPayload("warrior.basic_attack", farthest.CreatureId, "creature"),
             3,
             timeout.Token);
 
@@ -307,7 +307,8 @@ public sealed class CombatWebSocketIntegrationTests
 
         // Seed a creature right next to the player (0,0) so the kill is deterministic.
         var creatureWorld = factory.Services.GetRequiredService<ICreatureWorld>();
-        var slimeDefinition = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
+        var slimeDefinition = factory.Services.GetRequiredService<ICreatureCatalog>()
+            .Get(new CreatureDefinitionId("creature.slime"));
         var creature = new CreatureInstance(
             CreatureInstanceId.New(),
             slimeDefinition.Id,
@@ -322,7 +323,7 @@ public sealed class CombatWebSocketIntegrationTests
             await SendAsync(
                 socket,
                 ProtocolMessageNames.CombatAttack,
-                new AttackCommandPayload(AbilityCatalog.BasicAttack.Value, creature.Id.Value, "creature"),
+                new AttackCommandPayload("warrior.basic_attack", creature.Id.Value, "creature"),
                 sequence,
                 timeout.Token);
 

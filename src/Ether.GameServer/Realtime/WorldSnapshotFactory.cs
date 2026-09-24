@@ -16,6 +16,8 @@ public sealed class WorldSnapshotFactory
 {
     private readonly IWorldMapProvider _maps;
     private readonly ICreatureWorld _creatures;
+    private readonly ICreatureCatalog _creatureCatalog;
+    private readonly IItemCatalog _itemCatalog;
     private readonly CreatureSpawnService _spawner;
     private readonly IInventoryService _inventory;
     private readonly TimeProvider _timeProvider;
@@ -23,12 +25,16 @@ public sealed class WorldSnapshotFactory
     public WorldSnapshotFactory(
         IWorldMapProvider maps,
         ICreatureWorld creatures,
+        ICreatureCatalog creatureCatalog,
+        IItemCatalog itemCatalog,
         CreatureSpawnService spawner,
         IInventoryService inventory,
         TimeProvider timeProvider)
     {
         _maps = maps;
         _creatures = creatures;
+        _creatureCatalog = creatureCatalog;
+        _itemCatalog = itemCatalog;
         _spawner = spawner;
         _inventory = inventory;
         _timeProvider = timeProvider;
@@ -51,13 +57,17 @@ public sealed class WorldSnapshotFactory
         var inventory = await _inventory.GetInventoryAsync(characterId, cancellationToken).ConfigureAwait(false);
 
         var inventoryItems = inventory
-            .Select(item => new InventoryItemResponse(
-                item.DefinitionId.Value,
-                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).Name,
-                item.Quantity,
-                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).MaxStack,
-                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).Stackable,
-                item.Location.ToString()))
+            .Select(item =>
+            {
+                var definition = _itemCatalog.Get(item.DefinitionId);
+                return new InventoryItemResponse(
+                    item.DefinitionId.Value,
+                    definition.Name,
+                    item.Quantity,
+                    definition.MaxStack,
+                    definition.Stackable,
+                    item.Location.ToString());
+            })
             .ToList();
 
         return new WorldSnapshotPayload(
@@ -79,9 +89,9 @@ public sealed class WorldSnapshotFactory
             inventoryItems);
     }
 
-    private static CreatureSnapshotPayload ToSnapshot(CreatureInstance creature)
+    private CreatureSnapshotPayload ToSnapshot(CreatureInstance creature)
     {
-        var definition = CreatureCatalog.Get(creature.DefinitionId);
+        var definition = _creatureCatalog.Get(creature.DefinitionId);
 
         return new CreatureSnapshotPayload(
             creature.Id.Value,

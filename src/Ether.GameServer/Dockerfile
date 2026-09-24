@@ -5,6 +5,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS build
 WORKDIR /src
 
 COPY global.json Directory.Build.props Directory.Build.targets NuGet.config ./
+COPY content/ content/
 COPY src/Ether.Domain/ src/Ether.Domain/
 COPY src/Ether.Contracts/ src/Ether.Contracts/
 COPY src/Ether.Application/ src/Ether.Application/

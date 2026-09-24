@@ -1,0 +1,30 @@
+# Build output / artifacts
+artifacts/
+bin/
+obj/
+publish/
+
+# Git / VCS
+.git/
+.gitignore
+
+# IDE
+.vs/
+.idea/
+.vscode/
+
+# Tests are not required to publish the runtime images.
+tests/
+
+# Client (not part of backend images)
+client/
+
+# Documentation is not needed for image builds; versioned gameplay content is.
+docs/
+scripts/
+*.md
+
+# Local state
+*.log
+.env
+.env.*

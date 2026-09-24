@@ -13,8 +13,8 @@ namespace Ether.Application.Tests.Combat;
 
 public sealed class AttackCommandHandlerTests
 {
-    private static readonly AbilityId BasicAttack = AbilityCatalog.BasicAttack;
-    private static readonly AbilityId PowerStrike = AbilityCatalog.PowerStrike;
+    private static readonly AbilityId BasicAttack = new("warrior.basic_attack");
+    private static readonly AbilityId PowerStrike = new("warrior.power_strike");
 
     private static readonly CombatOptions Options = new()
     {
@@ -28,7 +28,7 @@ public sealed class AttackCommandHandlerTests
         FakeCombatStatsProvider stats,
         IAbilityCooldownStore cooldowns,
         IRandomSource random) =>
-        new(persistence, persistence, stats, cooldowns, new NoopEntityLockProvider(), random,
+        new(persistence, persistence, stats, TestGameContentCatalog.Instance, cooldowns, new NoopEntityLockProvider(), random,
             Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System);
 
     private static FakeCombatStatsProvider NeutralStats() => new();

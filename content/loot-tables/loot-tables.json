@@ -1,0 +1,25 @@
+[
+  {
+    "id": "loot.slime",
+    "creatureId": "creature.slime",
+    "entries": [
+      { "itemId": "item.slime_gel", "chance": 0.8, "minQuantity": 1, "maxQuantity": 2 }
+    ]
+  },
+  {
+    "id": "loot.wolf",
+    "creatureId": "creature.wolf",
+    "entries": [
+      { "itemId": "item.wolf_pelt", "chance": 0.7, "minQuantity": 1, "maxQuantity": 1 },
+      { "itemId": "item.health_potion", "chance": 0.2, "minQuantity": 1, "maxQuantity": 1 }
+    ]
+  },
+  {
+    "id": "loot.spider",
+    "creatureId": "creature.spider",
+    "entries": [
+      { "itemId": "item.spider_silk", "chance": 0.75, "minQuantity": 1, "maxQuantity": 2 },
+      { "itemId": "item.copper_ore", "chance": 0.3, "minQuantity": 1, "maxQuantity": 1 }
+    ]
+  }
+]

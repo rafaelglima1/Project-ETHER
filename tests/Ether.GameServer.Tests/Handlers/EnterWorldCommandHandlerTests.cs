@@ -8,6 +8,7 @@ using Ether.GameServer.Handlers;
 using Ether.GameServer.Protocol;
 using Ether.GameServer.Sessions;
 using Ether.GameServer.Tests.Fakes;
+using Ether.Infrastructure.Content;
 
 using Microsoft.Extensions.Options;
 
@@ -25,8 +26,10 @@ public sealed class EnterWorldCommandHandlerTests
     {
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
         var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
+        var content = new JsonGameContentCatalog(Options.Create(new ContentOptions()));
         var snapshots = new Ether.GameServer.Realtime.WorldSnapshotFactory(
-            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System);
+            new FakeWorldMapProvider(), creatures, content, content,
+            new CreatureSpawnService(creatures, content, content), new FakeInventoryService(), TimeProvider.System);
         var handler = new EnterWorldCommandHandler(enterWorld, snapshots, TimeProvider.System);
 
         var session = new GameSession(16, DateTimeOffset.UtcNow);
@@ -41,8 +44,10 @@ public sealed class EnterWorldCommandHandlerTests
         var persistence = new InMemoryPersistence();
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
         var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
+        var content = new JsonGameContentCatalog(Options.Create(new ContentOptions()));
         var snapshots = new Ether.GameServer.Realtime.WorldSnapshotFactory(
-            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System);
+            new FakeWorldMapProvider(), creatures, content, content,
+            new CreatureSpawnService(creatures, content, content), new FakeInventoryService(), TimeProvider.System);
         var handler = new EnterWorldCommandHandler(enterWorld, snapshots, TimeProvider.System);
         var session = new GameSession(16, DateTimeOffset.UtcNow);
         var responder = new CapturingResponder();

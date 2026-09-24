@@ -21,7 +21,7 @@ internal sealed class FakeCreatureWorld : ICreatureWorld
 
     public CreatureInstance Seed(CreatureDefinitionId definitionId, int x, int y)
     {
-        var definition = CreatureCatalog.Get(definitionId);
+        var definition = TestGameContentCatalog.Instance.Get(definitionId);
         var creature = new CreatureInstance(
             CreatureInstanceId.New(), definitionId, new MapId(1), new WorldPosition(new MapId(1), x, y), definition.MaxHealth);
         _creatures.Add(creature);

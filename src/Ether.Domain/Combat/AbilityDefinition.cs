@@ -3,8 +3,8 @@ using Ether.Domain.Common;
 namespace Ether.Domain.Combat;
 
 /// <summary>
-/// Data-driven ability definition (Blueprint v5.0 §12).
-/// M5 uses a domain-side catalog; the content pipeline replaces this later.
+/// Domain value object for an ability definition loaded from validated content.
+/// It owns its gameplay invariants and has no file-system dependency.
 /// </summary>
 public sealed record AbilityDefinition
 {

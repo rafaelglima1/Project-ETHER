@@ -20,6 +20,7 @@ public sealed class AttackCommandHandler
     private readonly ICharacterRepository _characters;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICombatStatsProvider _stats;
+    private readonly IAbilityCatalog _abilities;
     private readonly IAbilityCooldownStore _cooldowns;
     private readonly IEntityLockProvider _locks;
     private readonly IRandomSource _random;
@@ -30,6 +31,7 @@ public sealed class AttackCommandHandler
         ICharacterRepository characters,
         IUnitOfWork unitOfWork,
         ICombatStatsProvider stats,
+        IAbilityCatalog abilities,
         IAbilityCooldownStore cooldowns,
         IEntityLockProvider locks,
         IRandomSource random,
@@ -41,6 +43,7 @@ public sealed class AttackCommandHandler
         _characters = characters;
         _unitOfWork = unitOfWork;
         _stats = stats;
+        _abilities = abilities;
         _cooldowns = cooldowns;
         _locks = locks;
         _random = random;
@@ -55,7 +58,7 @@ public sealed class AttackCommandHandler
         CharacterId targetId,
         CancellationToken cancellationToken)
     {
-        if (!AbilityCatalog.TryGet(abilityId, out var ability))
+        if (!_abilities.TryGet(abilityId, out var ability))
         {
             throw new CombatRejectedException(CombatRejectionReason.AbilityNotFound, $"Ability '{abilityId.Value}' does not exist.");
         }

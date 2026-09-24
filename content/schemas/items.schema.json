@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-ether.invalid/content/schemas/items.schema.json",
+  "title": "Item definitions",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "name", "category", "stackable", "maxStack", "baseValue", "rarity"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "category": { "enum": ["Misc", "Consumable", "Material", "Equipment", "Quest"] },
+      "stackable": { "type": "boolean" },
+      "maxStack": { "type": "integer", "minimum": 1 },
+      "baseValue": { "type": "integer", "minimum": 0 },
+      "rarity": { "enum": ["Common", "Uncommon", "Rare", "Epic", "Legendary"] }
+    }
+  }
+}

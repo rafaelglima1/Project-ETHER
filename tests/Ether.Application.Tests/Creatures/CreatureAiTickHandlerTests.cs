@@ -16,11 +16,11 @@ public sealed class CreatureSpawnServiceTests
     public void Spawns_the_catalog_creatures_for_a_map()
     {
         var world = new FakeCreatureWorld();
-        var service = new CreatureSpawnService(world);
+        var service = new CreatureSpawnService(world, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance);
 
         service.EnsureSpawned(new MapId(1));
 
-        var expected = CreatureSpawnCatalog.ForMap(new MapId(1)).Count;
+        var expected = TestGameContentCatalog.Instance.ForMap(new MapId(1)).Count;
         Assert.Equal(expected, world.GetByMap(new MapId(1)).Count);
     }
 
@@ -28,7 +28,7 @@ public sealed class CreatureSpawnServiceTests
     public void Spawning_twice_does_not_duplicate()
     {
         var world = new FakeCreatureWorld();
-        var service = new CreatureSpawnService(world);
+        var service = new CreatureSpawnService(world, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance);
 
         service.EnsureSpawned(new MapId(1));
         var first = world.GetByMap(new MapId(1)).Count;
@@ -41,7 +41,7 @@ public sealed class CreatureSpawnServiceTests
     public void Unknown_map_spawns_nothing()
     {
         var world = new FakeCreatureWorld();
-        var service = new CreatureSpawnService(world);
+        var service = new CreatureSpawnService(world, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance);
 
         service.EnsureSpawned(new MapId(99));
 
@@ -62,7 +62,8 @@ public sealed class CreatureAiTickHandlerTests
         TimeProvider? clock = null) =>
         new(
             world,
-            new CreatureSpawnService(world),
+            new CreatureSpawnService(world, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance),
+            TestGameContentCatalog.Instance,
             persistence,
             persistence,
             stats,
@@ -146,7 +147,7 @@ public sealed class CreatureAiTickHandlerTests
         var slime = world.Seed(new CreatureDefinitionId("creature.slime"), 6, 6);
 
         var clock = new FixedTimeProvider(DateTimeOffset.UnixEpoch);
-        var definition = CreatureCatalog.Get(slime.DefinitionId);
+        var definition = TestGameContentCatalog.Instance.Get(slime.DefinitionId);
         slime.ApplyDamage(999, clock.GetUtcNow(), TimeSpan.FromSeconds(30));
 
         // Advance beyond the respawn delay.

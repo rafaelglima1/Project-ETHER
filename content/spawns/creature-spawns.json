@@ -1,0 +1,6 @@
+[
+  { "mapId": 1, "x": 6, "y": 6, "creatureId": "creature.slime" },
+  { "mapId": 1, "x": 9, "y": 4, "creatureId": "creature.slime" },
+  { "mapId": 1, "x": 14, "y": 11, "creatureId": "creature.wolf" },
+  { "mapId": 1, "x": 22, "y": 18, "creatureId": "creature.spider" }
+]

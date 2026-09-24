@@ -1,0 +1,20 @@
+[
+  {
+    "id": "warrior.basic_attack",
+    "name": "Basic Attack",
+    "damageType": "Physical",
+    "baseDamage": 4,
+    "powerScaling": 1,
+    "cooldownMilliseconds": 0,
+    "range": 1
+  },
+  {
+    "id": "warrior.power_strike",
+    "name": "Power Strike",
+    "damageType": "Physical",
+    "baseDamage": 8,
+    "powerScaling": 1.5,
+    "cooldownMilliseconds": 6000,
+    "range": 1
+  }
+]

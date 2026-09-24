@@ -6,21 +6,10 @@ using Ether.Domain.Tests.Fakes;
 
 namespace Ether.Domain.Tests.Items;
 
-public sealed class ItemCatalogTests
+public sealed class ItemDefinitionTests
 {
-    [Fact]
-    public void Catalog_contains_the_m7_materials()
-    {
-        Assert.True(ItemCatalog.TryGet(ItemCatalog.SlimeGel, out var gel));
-        Assert.Equal("Slime Gel", gel.Name);
-        Assert.Equal(ItemCategory.Material, gel.Category);
-    }
-
-    [Fact]
-    public void Unknown_item_is_rejected()
-    {
-        Assert.Throws<DomainException>(() => ItemCatalog.Get(new ItemDefinitionId("item.nope")));
-    }
+    internal static ItemDefinition SlimeGel { get; } =
+        new(new ItemDefinitionId("item.slime_gel"), "Slime Gel", ItemCategory.Material, stackable: true, maxStack: 100, baseValue: 2);
 
     [Fact]
     public void Non_stackable_items_must_have_max_stack_one()
@@ -35,7 +24,7 @@ public sealed class ItemInstanceTests
     [Fact]
     public void Loot_creates_an_inventory_instance()
     {
-        var definition = ItemCatalog.Get(ItemCatalog.SlimeGel);
+        var definition = ItemDefinitionTests.SlimeGel;
         var owner = CharacterId.New();
 
         var item = ItemInstance.CreateLoot(definition, quantity: 2, owner);
@@ -49,7 +38,7 @@ public sealed class ItemInstanceTests
     [Fact]
     public void Loot_quantity_is_validated()
     {
-        var definition = ItemCatalog.Get(ItemCatalog.SlimeGel);
+        var definition = ItemDefinitionTests.SlimeGel;
 
         Assert.Throws<DomainException>(() => ItemInstance.CreateLoot(definition, 0, CharacterId.New()));
         Assert.Throws<DomainException>(() => ItemInstance.CreateLoot(definition, definition.MaxStack + 1, CharacterId.New()));
@@ -61,7 +50,7 @@ public sealed class LootRollerTests
     private static LootTableDefinition Table() =>
         new LootTableDefinition("loot.test", new LootEntry[]
         {
-            new(ItemCatalog.SlimeGel, Chance: 0.8, MinQuantity: 1, MaxQuantity: 2),
+            new(ItemDefinitionTests.SlimeGel.Id, Chance: 0.8, MinQuantity: 1, MaxQuantity: 2),
         }).Validate();
 
     [Fact]
@@ -70,7 +59,7 @@ public sealed class LootRollerTests
         var drops = LootRoller.Roll(Table(), new SequencedRandomSource(0.5, 0.0));
 
         var drop = Assert.Single(drops);
-        Assert.Equal(ItemCatalog.SlimeGel, drop.ItemDefinitionId);
+        Assert.Equal(ItemDefinitionTests.SlimeGel.Id, drop.ItemDefinitionId);
         Assert.Equal(1, drop.Quantity);
     }
 
@@ -94,8 +83,8 @@ public sealed class LootRollerTests
     [Fact]
     public void Zero_chance_never_drops_and_full_chance_always_drops()
     {
-        var never = new LootTableDefinition("t", new LootEntry[] { new(ItemCatalog.SlimeGel, 0, 1, 1) }).Validate();
-        var always = new LootTableDefinition("t", new LootEntry[] { new(ItemCatalog.SlimeGel, 1, 1, 1) }).Validate();
+        var never = new LootTableDefinition("t", new LootEntry[] { new(ItemDefinitionTests.SlimeGel.Id, 0, 1, 1) }).Validate();
+        var always = new LootTableDefinition("t", new LootEntry[] { new(ItemDefinitionTests.SlimeGel.Id, 1, 1, 1) }).Validate();
 
         Assert.Empty(LootRoller.Roll(never, new SequencedRandomSource(0.0, 0.0)));
         Assert.Single(LootRoller.Roll(always, new SequencedRandomSource(0.99, 0.0)));

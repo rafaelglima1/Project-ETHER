@@ -12,15 +12,16 @@ replication infrastructure the game does not need yet.
 
 ## Decision — creatures are transient world state
 
-Creature **definitions** and **spawn points** are content (a domain catalog for now,
-`CreatureCatalog`/`CreatureSpawnCatalog`, replaced by the content pipeline later).
+Creature **definitions** and **spawn points** are content in
+`content/creatures/creatures.json` and `content/spawns/creature-spawns.json`.
 Creature **instances** live in memory (`ICreatureWorld`) and are materialized from
 spawn definitions on world entry, then respawned after death. **No creature tables
 are created.** PostgreSQL remains the source of truth for characters (including HP).
 
 Rationale: creature instances are high-churn simulation state; persisting them
 would add cost and complexity with no gameplay benefit at this stage. The Blueprint
-`creature_definitions`/`spawn` tables belong to the content/persistence milestone.
+`creature_definitions`/`spawn` tables belong to a future content/persistence
+milestone; ETHER-039 keeps the current definitions in validated files.
 
 ## Decision — AI is pure and testable
 

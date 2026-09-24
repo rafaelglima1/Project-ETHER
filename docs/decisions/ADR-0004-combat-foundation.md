@@ -48,10 +48,11 @@ The damage pipeline is unchanged when a richer stats source replaces it.
 ## Decision — abilities
 
 Abilities are `AbilityDefinition` value objects (id, damage type, base damage,
-power scaling, cooldown, range) held in a domain catalog for the Warrior vertical
-slice: **Basic Attack** and **Power Strike**. The content pipeline will replace the
-catalog with data files. Ids are stable keys (e.g. `warrior.power_strike`), not
-random Guids, because abilities are content.
+power scaling, cooldown, range). M5 initially held the Warrior vertical-slice
+definitions in a domain catalog: **Basic Attack** and **Power Strike**. ETHER-039
+moves those unchanged values to `content/abilities/abilities.json`; ids remain
+stable keys (e.g.
+`warrior.power_strike`), not random Guids, because abilities are content.
 
 ## Decision — range and targeting
 

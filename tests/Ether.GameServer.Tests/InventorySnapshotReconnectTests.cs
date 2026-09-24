@@ -62,7 +62,10 @@ public sealed class InventorySnapshotReconnectTests
         {
             var r = await socket.ReceiveAsync(buffer, ct);
             ms.Write(buffer, 0, r.Count);
-            if (r.EndOfMessage) break;
+            if (r.EndOfMessage)
+            {
+                break;
+            }
         }
         var json = Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length);
         var env = Serializer.TryDeserialize(json, out _);
@@ -73,7 +76,10 @@ public sealed class InventorySnapshotReconnectTests
             {
                 var r = await socket.ReceiveAsync(buffer, ct);
                 ms2.Write(buffer, 0, r.Count);
-                if (r.EndOfMessage) break;
+                if (r.EndOfMessage)
+                {
+                    break;
+                }
             }
             var json2 = Encoding.UTF8.GetString(ms2.GetBuffer(), 0, (int)ms2.Length);
             env = Serializer.TryDeserialize(json2, out _);
@@ -94,7 +100,8 @@ public sealed class InventorySnapshotReconnectTests
 
         // Keep a creature in the world so the snapshot is representative.
         var creatureWorld = factory.Services.GetRequiredService<ICreatureWorld>();
-        var slime = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
+        var slime = factory.Services.GetRequiredService<ICreatureCatalog>()
+            .Get(new CreatureDefinitionId("creature.slime"));
         var creature = new CreatureInstance(
             CreatureInstanceId.New(), slime.Id, new MapId(1),
             new WorldPosition(new MapId(1), 1, 0), slime.MaxHealth);
@@ -122,7 +129,8 @@ public sealed class InventorySnapshotReconnectTests
         Assert.Equal(CharacterState.Combat, storedCharacter.State);
 
         // Simulate a persisted loot reward so the reconnect snapshot must contain it.
-        var itemDefinition = Ether.Domain.Items.ItemCatalog.Get(Ether.Domain.Items.ItemCatalog.SlimeGel);
+        var itemDefinition = factory.Services.GetRequiredService<IItemCatalog>()
+            .Get(new Ether.Domain.Items.ItemDefinitionId("item.slime_gel"));
         var item = Ether.Domain.Items.ItemInstance.CreateLoot(itemDefinition, 2, new CharacterId(character.Value));
         await persistence.AddAsync(item, ct.Token);
         await persistence.SaveChangesAsync(ct.Token);

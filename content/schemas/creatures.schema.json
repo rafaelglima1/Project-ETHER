@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://project-ether.invalid/content/schemas/creatures.schema.json",
+  "title": "Creature definitions",
+  "type": "array",
+  "minItems": 1,
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["id", "name", "level", "maxHealth", "attackPower", "armor", "moveSpeed", "aggroRange", "attackRange", "attackCooldownMilliseconds", "leashRange", "respawnDelayMilliseconds", "experienceReward", "resistances"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "name": { "type": "string", "minLength": 1 },
+      "level": { "type": "integer", "minimum": 1 },
+      "maxHealth": { "type": "integer", "minimum": 1 },
+      "attackPower": { "type": "number", "minimum": 0 },
+      "armor": { "type": "number", "minimum": 0 },
+      "moveSpeed": { "type": "number", "minimum": 0 },
+      "aggroRange": { "type": "integer", "minimum": 1 },
+      "attackRange": { "type": "integer", "minimum": 1 },
+      "attackCooldownMilliseconds": { "type": "integer", "minimum": 0 },
+      "leashRange": { "type": "integer", "minimum": 1 },
+      "respawnDelayMilliseconds": { "type": "integer", "minimum": 0 },
+      "experienceReward": { "type": "integer", "minimum": 0 },
+      "resistances": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["damageType", "value"],
+          "properties": {
+            "damageType": { "enum": ["Physical", "Fire", "Ice", "Lightning", "Poison", "Arcane"] },
+            "value": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

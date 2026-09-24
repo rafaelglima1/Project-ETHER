@@ -1,0 +1,47 @@
+[
+  {
+    "id": "item.slime_gel",
+    "name": "Slime Gel",
+    "category": "Material",
+    "stackable": true,
+    "maxStack": 100,
+    "baseValue": 2,
+    "rarity": "Common"
+  },
+  {
+    "id": "item.wolf_pelt",
+    "name": "Wolf Pelt",
+    "category": "Material",
+    "stackable": true,
+    "maxStack": 100,
+    "baseValue": 6,
+    "rarity": "Common"
+  },
+  {
+    "id": "item.spider_silk",
+    "name": "Spider Silk",
+    "category": "Material",
+    "stackable": true,
+    "maxStack": 100,
+    "baseValue": 5,
+    "rarity": "Common"
+  },
+  {
+    "id": "item.health_potion",
+    "name": "Health Potion",
+    "category": "Consumable",
+    "stackable": true,
+    "maxStack": 20,
+    "baseValue": 15,
+    "rarity": "Common"
+  },
+  {
+    "id": "item.copper_ore",
+    "name": "Copper Ore",
+    "category": "Material",
+    "stackable": true,
+    "maxStack": 100,
+    "baseValue": 3,
+    "rarity": "Common"
+  }
+]

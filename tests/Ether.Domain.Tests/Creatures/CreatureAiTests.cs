@@ -5,7 +5,7 @@ namespace Ether.Domain.Tests.Creatures;
 
 public sealed class CreatureAiTests
 {
-    private static readonly CreatureDefinition Slime = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
+    private static readonly CreatureDefinition Slime = CreatureDefinitionTests.CreateCreatureDefinition("creature.slime", "Slime");
 
     private static CreatureInstance Spawn(int x = 6, int y = 6)
     {

@@ -13,7 +13,7 @@ namespace Ether.Application.Tests.Characters;
 
 public sealed class MovementHandlerTests
 {
-    private static readonly WorldOptions WorldOptions = new() { Width = 32, Height = 32, MaxMoveDistance = 12 };
+    private static readonly WorldOptions WorldOptions = new() { MaxMoveDistance = 12 };
 
     private static async Task<(InMemoryPersistence Persistence, AccountId AccountId, CharacterId CharacterId)>
         SeedInWorldCharacterAsync()

@@ -1,8 +1,8 @@
 using Ether.Application.Abstractions;
 using Ether.Application.Combat;
-using Ether.Application.Progression;
 using Ether.Application.Creatures;
 using Ether.Application.Exceptions;
+using Ether.Application.Progression;
 using Ether.Application.Tests.Fakes;
 using Ether.Contracts.Configuration;
 using Ether.Domain.Accounts;
@@ -17,8 +17,8 @@ namespace Ether.Application.Tests.Creatures;
 
 public sealed class AttackCreatureCommandHandlerTests
 {
-    private static readonly AbilityId BasicAttack = AbilityCatalog.BasicAttack;
-    private static readonly AbilityId PowerStrike = AbilityCatalog.PowerStrike;
+    private static readonly AbilityId BasicAttack = new("warrior.basic_attack");
+    private static readonly AbilityId PowerStrike = new("warrior.power_strike");
 
     private static readonly CombatOptions Options = new() { MinimumDamage = 1, ResistanceCap = 0.9, MaxAttacksPerSecond = 4 };
 
@@ -29,8 +29,11 @@ public sealed class AttackCreatureCommandHandlerTests
         IAbilityCooldownStore cooldowns,
         IRandomSource random,
         FakeInventoryService? items = null) =>
-        new(persistence, world, persistence, stats, cooldowns, new NoopEntityLockProvider(), random,
-            new KillRewardService(items ?? new FakeInventoryService(), random, TimeProvider.System),
+        new(persistence, world, persistence, stats,
+            TestGameContentCatalog.Instance, TestGameContentCatalog.Instance, TestGameContentCatalog.Instance,
+            cooldowns, new NoopEntityLockProvider(), random,
+            new KillRewardService(items ?? new FakeInventoryService(), TestGameContentCatalog.Instance,
+                TestGameContentCatalog.Instance, random, TimeProvider.System),
             Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System);
 
     private static FakeCombatStatsProvider Neutral() => new();
@@ -183,12 +186,12 @@ public sealed class AttackCreatureCommandHandlerTests
 
         var result = await handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None);
 
-        var definition = CreatureCatalog.Get(creature.DefinitionId);
+        var definition = TestGameContentCatalog.Instance.Get(creature.DefinitionId);
         Assert.Equal(definition.ExperienceReward, result.ExperienceGained);
         Assert.Equal(definition.ExperienceReward, attacker.Experience);
         Assert.NotNull(result.Loot);
         Assert.Single(result.Loot!);
-        Assert.Equal(ItemCatalog.SlimeGel.Value, result.Loot![0].ItemDefinitionId);
+        Assert.Equal(TestGameContentCatalog.SlimeGel.Id.Value, result.Loot![0].ItemDefinitionId);
         Assert.Single(items.All);
     }
 

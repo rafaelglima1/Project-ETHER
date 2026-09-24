@@ -62,6 +62,9 @@ their milestones. The architecture is prepared to receive them.
 ### D10 — Content JSON
 
 No complete JSON Schema in M0. The Content Pipeline has its own milestone.
+ETHER-039 delivers the first versioned schemas and startup validator for the
+currently implemented gameplay content; see ADR-0007. Unsupported future content
+types are not silently accepted as complete.
 
 ### D11 — Secrets
 

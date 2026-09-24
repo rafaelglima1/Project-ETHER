@@ -14,7 +14,7 @@ namespace Ether.GameServer.Tests.Handlers;
 
 public sealed class MovementCommandHandlerTests
 {
-    private static readonly WorldOptions World = new() { Width = 32, Height = 32, MaxMoveDistance = 12 };
+    private static readonly WorldOptions World = new() { MaxMoveDistance = 12 };
 
     private static ProtocolEnvelope Command(int x, int y, long sequence = 1) =>
         new ProtocolSerializer().Build(

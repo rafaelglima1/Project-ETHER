@@ -4,26 +4,12 @@ using Ether.Domain.World;
 
 namespace Ether.Domain.Tests.Creatures;
 
-public sealed class CreatureCatalogTests
+public sealed class CreatureDefinitionTests
 {
-    [Fact]
-    public void Catalog_exposes_the_m6_creatures()
-    {
-        Assert.True(CreatureCatalog.TryGet(new CreatureDefinitionId("creature.slime"), out var slime));
-        Assert.Equal("Slime", slime.Name);
-        Assert.True(CreatureCatalog.All.Count >= 3);
-    }
-
-    [Fact]
-    public void Unknown_definition_is_rejected()
-    {
-        Assert.Throws<DomainException>(() => CreatureCatalog.Get(new CreatureDefinitionId("creature.nope")));
-    }
-
     [Fact]
     public void Basic_attack_reuses_the_ability_contract()
     {
-        var definition = CreatureCatalog.Get(new CreatureDefinitionId("creature.wolf"));
+        var definition = CreateCreatureDefinition();
         var attack = definition.BasicAttack();
 
         Assert.Equal(definition.AttackRange, attack.Range);
@@ -39,20 +25,24 @@ public sealed class CreatureCatalogTests
         Assert.Throws<DomainException>(() => { _ = new CreatureDefinitionId(value); });
     }
 
-    [Fact]
-    public void Spawn_catalog_targets_existing_definitions()
-    {
-        var spawns = CreatureSpawnCatalog.ForMap(new MapId(1));
 
-        Assert.NotEmpty(spawns);
-        Assert.All(spawns, spawn => Assert.True(CreatureCatalog.TryGet(spawn.DefinitionId, out _)));
-    }
+    internal static CreatureDefinition CreateCreatureDefinition(
+        string id = "creature.test",
+        string name = "Test Creature",
+        int maxHealth = 45,
+        int attackRange = 1,
+        TimeSpan? attackCooldown = null,
+        long experienceReward = 12) =>
+        new(
+            new CreatureDefinitionId(id), name, level: 1, maxHealth, attackPower: 5, armor: 1, moveSpeed: 1,
+            aggroRange: 6, attackRange, attackCooldown ?? TimeSpan.FromSeconds(2), leashRange: 10,
+            respawnDelay: TimeSpan.FromSeconds(30), new Dictionary<Ether.Domain.Combat.DamageType, double>(), experienceReward);
 }
 
 public sealed class CreatureInstanceTests
 {
     private static readonly DateTimeOffset Now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-    private static readonly CreatureDefinition Slime = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
+    private static readonly CreatureDefinition Slime = CreatureDefinitionTests.CreateCreatureDefinition("creature.slime", "Slime", maxHealth: 30);
 
     private static CreatureInstance Spawn() =>
         new(CreatureInstanceId.New(), Slime.Id, new MapId(1), new WorldPosition(new MapId(1), 6, 6), Slime.MaxHealth);

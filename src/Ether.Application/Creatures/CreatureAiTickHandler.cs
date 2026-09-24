@@ -19,6 +19,7 @@ public sealed class CreatureAiTickHandler
 {
     private readonly ICreatureWorld _world;
     private readonly CreatureSpawnService _spawner;
+    private readonly ICreatureCatalog _creatureCatalog;
     private readonly ICharacterRepository _characters;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICombatStatsProvider _characterStats;
@@ -32,6 +33,7 @@ public sealed class CreatureAiTickHandler
     public CreatureAiTickHandler(
         ICreatureWorld world,
         CreatureSpawnService spawner,
+        ICreatureCatalog creatureCatalog,
         ICharacterRepository characters,
         IUnitOfWork unitOfWork,
         ICombatStatsProvider characterStats,
@@ -46,6 +48,7 @@ public sealed class CreatureAiTickHandler
 
         _world = world;
         _spawner = spawner;
+        _creatureCatalog = creatureCatalog;
         _characters = characters;
         _unitOfWork = unitOfWork;
         _characterStats = characterStats;
@@ -77,7 +80,7 @@ public sealed class CreatureAiTickHandler
 
         foreach (var creature in creatures)
         {
-            var definition = CreatureCatalog.Get(creature.DefinitionId);
+            var definition = _creatureCatalog.Get(creature.DefinitionId);
 
             if (!creature.IsAlive)
             {
