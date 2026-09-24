@@ -4,8 +4,8 @@ Mobile-first 2D MMORPG client for Project Ether. Godot 4.x, **GDScript**
 (Blueprint v5.0 §2/§49). The client is *presentation + intent only* — identity,
 position, world state, creature AI, health and damage all come from the backend.
 
-**Current milestone: M6 — creatures + AI** (built on the M4 realtime foundation
-and the M5 combat foundation). It runs the full loop against the real backend
+**Current milestone: M8 — inventory** (built on the M4 realtime foundation and
+the M5 combat foundation). It runs the full loop against the real backend
 over HTTPS/WSS and keeps an offline mock (with the same contract) for
 development/CI.
 

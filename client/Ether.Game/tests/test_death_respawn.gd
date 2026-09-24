@@ -461,10 +461,10 @@ func test_respawn_in_flight_blocks_duplicate_commands() -> void:
 	assert_ne(first, "", "first respawn sent")
 	assert_eq(second, "", "second respawn blocked while pending")
 	assert_eq(sender.current_sequence(), before + 1, "exactly one command emitted")
-	assert_true(network.resawn_pending(), "pending until server replies")
+	assert_true(network.respawn_pending(), "pending until server replies")
 
 	_pump(0.4)
-	assert_false(network.resawn_pending(), "snapshot clears pending")
+	assert_false(network.respawn_pending(), "snapshot clears pending")
 
 
 func test_hud_death_overlay_and_button_gating() -> void:

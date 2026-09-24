@@ -59,10 +59,12 @@ func _initialize() -> void:
 
 	if _config.api_base_url == "" or _config.game_websocket_url == "":
 		print("REAL_E2E: BLOCKED — set ETHER_CLIENT_API_URL and ETHER_CLIENT_WS_URL")
+		_finished = true
 		quit(2)
 		return
 	if _email == "" or _password == "":
 		print("REAL_E2E: BLOCKED — set ETHER_E2E_EMAIL and ETHER_E2E_PASSWORD")
+		_finished = true
 		quit(2)
 		return
 
@@ -87,6 +89,8 @@ func _on_ws_connected() -> void:
 
 
 func _process(_delta: float) -> bool:
+	if _finished:
+		return true
 	if not _started:
 		# Start on the first frame: HTTPRequest/WebSocket need a running tree.
 		_started = true
@@ -98,8 +102,6 @@ func _process(_delta: float) -> bool:
 		return false
 
 	var now := _now()
-	if _finished:
-		return true
 	if now > _total_deadline:
 		return _fail("total timeout at stage '%s'" % _stage_name())
 	if _stage != Stage.DONE and _stage != Stage.IDLE and now > _stage_deadline:

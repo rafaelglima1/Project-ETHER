@@ -130,6 +130,14 @@ func test_stale_sequence_is_rejected_by_server() -> void:
 		_has_error("system.ping", ProtocolMessages.CODE_INVALID_SEQUENCE), "stale sequence rejected")
 
 
+func test_http_inventory_errors_include_expired_session_message() -> void:
+	var api := HttpApiClient.new("https://game.rotagov.com.br")
+	assert_eq(api._describe_failure(401, ""), "Invalid credentials or session expired.", "401 explains expired session")
+	assert_eq(api._describe_failure(403, ""), "You are not allowed to do that.", "403 remains distinct")
+	assert_eq(api._describe_failure(500, ""), "Request failed (HTTP 500).", "server error is surfaced")
+	api.free()
+
+
 func test_oracle_profile_endpoints() -> void:
 	var config := ClientConfig.new()
 	config.profile = ClientConfig.Profile.ORACLE

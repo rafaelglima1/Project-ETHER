@@ -28,7 +28,7 @@ func test_snapshot_inventory_replaces_mirror() -> void:
 	assert_eq(state.inventory.size(), 2, "snapshot replaces (no merge duplicates)")
 	assert_eq(int(state.inventory[0].get("quantity", 0)), 3, "authoritative quantity")
 	assert_eq(String(state.inventory[1].get("name", "")), "Coin Pouch")
-	assert_eq(String(state.inventory[0].get("maxStack", "")), "99" if false else str(state.inventory[0].get("maxStack", 99)))
+	assert_eq(int(state.inventory[0].get("maxStack", 0)), 99, "max stack preserved")
 
 
 func test_snapshot_inventory_empty_clears_mirror() -> void:
