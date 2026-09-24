@@ -42,13 +42,8 @@ public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
             return;
         }
 
-        if (session.State == GameSessionState.InWorld)
-        {
-            await Reject(responder, envelope, ProtocolErrorCodes.AlreadyInWorld, "Character is already in the world.", cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
+        // Check character state BEFORE session state: a dead character must get
+        // CHARACTER_DEAD (so the client knows to respawn), not ALREADY_IN_WORLD.
         CharacterResponse character;
         try
         {
@@ -78,6 +73,13 @@ public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
         {
             // Expected gameplay states must never surface as INTERNAL_ERROR.
             await Reject(responder, envelope, ProtocolErrorCodes.InvalidState, "Character cannot enter the world.", cancellationToken)
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (session.State == GameSessionState.InWorld)
+        {
+            await Reject(responder, envelope, ProtocolErrorCodes.AlreadyInWorld, "Character is already in the world.", cancellationToken)
                 .ConfigureAwait(false);
             return;
         }
