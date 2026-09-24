@@ -56,9 +56,6 @@ var characters: Array = []
 var ai_enabled := true
 var criticals_enabled := true
 var loot_guaranteed := false
-## Seconds after death before the mock server respawns the player (server role).
-var respawn_delay := 3.0
-var _respawn_at := -1.0
 
 var _state: int = STATE_CONNECTING
 var _outbound_sequence := 0
@@ -82,18 +79,13 @@ func _init() -> void:
 	_seed_characters()
 
 
+## Rebuilds session-scoped state for a (re)connection. Persisted character
+## state — position, HP, level, XP and dead — deliberately survives, mirroring
+## the database: that is what makes reconnect-while-dead recoverable.
 func reset() -> void:
 	_state = STATE_CONNECTING
 	_outbound_sequence = 0
 	_last_inbound_sequence = 0
-	_clock = 0.0
-	_player_x = START_X
-	_player_y = START_Y
-	_player_hp = PLAYER_MAX_HEALTH
-	_player_level = 1
-	_player_xp = 0
-	_player_dead = false
-	_respawn_at = -1.0
 	_ability_ready_at = {}
 	_creatures = {}
 	session_id = _new_guid()
@@ -126,21 +118,11 @@ func set_loot_guaranteed(enabled: bool) -> void:
 	loot_guaranteed = enabled
 
 
-func set_respawn_delay(seconds: float) -> void:
-	respawn_delay = maxf(0.0, seconds)
-
-
-## Test hook: force the mock server-side player into the dead state.
+## Test hook: force the mock server-side player into the dead state. Respawn is
+## command-driven (character.respawn), exactly like the frozen backend contract.
 func force_player_dead() -> void:
 	_player_dead = true
 	_player_hp = 0
-	_respawn_at = _clock + respawn_delay
-
-
-## Test hook: schedule an immediate respawn on the next tick.
-func schedule_respawn_now() -> void:
-	_player_dead = true
-	_respawn_at = _clock
 
 
 # --- Transport-facing API -----------------------------------------------------
@@ -161,23 +143,18 @@ func tick(delta: float) -> Array:
 		return []
 
 	var out: Array = []
-	# Respawn is independent of AI (it is server-role recovery, not AI behaviour).
-	if _player_dead and _respawn_at >= 0.0 and _clock >= _respawn_at:
-		_respawn_player()
-		out.append(_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), "", 0))
 	if ai_enabled:
 		out.append_array(_run_creature_ai())
 	return out
 
 
 ## Server-role respawn: authoritative HP/position restored, reported to the
-## client through a canonical world.snapshot (no invented message).
+## client through a canonical world.snapshot (mirrors RespawnCommandHandler).
 func _respawn_player() -> void:
 	_player_dead = false
 	_player_hp = PLAYER_MAX_HEALTH
 	_player_x = START_X
 	_player_y = START_Y
-	_respawn_at = -1.0
 
 
 ## Accepts a raw command string and returns an Array of envelope dictionaries.
@@ -208,6 +185,8 @@ func handle_text(text: String) -> Array:
 		return _handle_move(payload, request_id, sequence)
 	elif name == ProtocolMessages.CMD_COMBAT_ATTACK:
 		return _handle_attack(payload, request_id, sequence)
+	elif name == ProtocolMessages.CMD_CHARACTER_RESPAWN:
+		return _handle_respawn(request_id, sequence)
 	elif name == ProtocolMessages.CMD_SYSTEM_PING:
 		return [_event(ProtocolMessages.EVT_SYSTEM_PONG, {"serverTime": _now()}, request_id, sequence)]
 
@@ -239,19 +218,40 @@ func _handle_authenticate(payload: Dictionary, request_id: String, sequence: int
 func _handle_enter_world(request_id: String, sequence: int) -> Array:
 	if _state == STATE_CONNECTING:
 		return [_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_NOT_AUTHENTICATED, "Session is not authenticated.", request_id, sequence)]
+	# Mirrors the backend fix (0131215): a dead character must be told to
+	# respawn (CHARACTER_DEAD), not to ALREADY_IN_WORLD.
+	if _player_dead:
+		return [_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_CHARACTER_DEAD, "Character is dead; respawn first.", request_id, sequence)]
 	if _state == STATE_IN_WORLD:
 		return [_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_ALREADY_IN_WORLD, "Character is already in the world.", request_id, sequence)]
 
+	# Character state (position / HP / level / XP) is persisted server-side and
+	# echoed back here, exactly like EnterWorldHandler; only the session moves.
 	_state = STATE_IN_WORLD
-	_player_x = START_X
-	_player_y = START_Y
-	_player_hp = PLAYER_MAX_HEALTH
-	_player_level = 1
-	_player_xp = 0
-	_player_dead = false
-	_respawn_at = -1.0
-	_spawn_creatures()
+	_ensure_creatures_spawned()
 	return [_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), request_id, sequence)]
+
+
+## Mirrors the frozen backend RespawnCommandHandler: replies with world.snapshot
+## on success, character.respawn.rejected otherwise.
+func _handle_respawn(request_id: String, sequence: int) -> Array:
+	if _state == STATE_CONNECTING:
+		return [_error(ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED, ProtocolMessages.CODE_NOT_AUTHENTICATED, "Session is not authenticated.", request_id, sequence)]
+	if not _player_dead:
+		return [_error(ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED, ProtocolMessages.CODE_CHARACTER_NOT_DEAD, "Character is not dead.", request_id, sequence)]
+
+	_respawn_player()
+	_state = STATE_IN_WORLD
+	# WorldSnapshotFactory builds map + player + living creatures for respawn too.
+	_ensure_creatures_spawned()
+	return [_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), request_id, sequence)]
+
+
+## WorldSnapshotFactory.EnsureSpawned equivalent: spawn once per connection,
+## keep existing living creatures (idempotent).
+func _ensure_creatures_spawned() -> void:
+	if _creatures.is_empty():
+		_spawn_creatures()
 
 
 func _handle_move(payload: Dictionary, request_id: String, sequence: int) -> Array:
@@ -457,7 +457,6 @@ func _creature_attacks_player(creature: Dictionary, out: Array) -> void:
 	_player_hp = maxi(0, _player_hp - int(hit["damage"]))
 	if _player_hp <= 0:
 		_player_dead = true
-		_respawn_at = _clock + respawn_delay
 
 	out.append(_event(ProtocolMessages.EVT_COMBAT_RESULT, {
 		"attackerId": creature["id"],

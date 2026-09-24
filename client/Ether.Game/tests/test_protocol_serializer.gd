@@ -154,3 +154,19 @@ func test_combat_attack_command_encodes_target_type() -> void:
 	var payload: Dictionary = result["envelope"]["payload"]
 	assert_eq(String(payload["targetType"]), "creature")
 	assert_eq(String(payload["abilityId"]), "warrior.basic_attack")
+
+
+func test_respawn_contract_matches_backend() -> void:
+	assert_eq(ProtocolMessages.CMD_CHARACTER_RESPAWN, "character.respawn")
+	assert_eq(ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED, "character.respawn.rejected")
+	assert_eq(ProtocolMessages.CODE_CHARACTER_DEAD, "CHARACTER_DEAD")
+	assert_eq(ProtocolMessages.CODE_CHARACTER_NOT_DEAD, "CHARACTER_NOT_DEAD")
+
+	var dead := ProtocolErrors.user_message(ProtocolMessages.CODE_CHARACTER_DEAD)
+	assert_true(dead.length() > 0)
+	assert_false(dead.contains(ProtocolMessages.CODE_CHARACTER_DEAD), "no raw code in UI text")
+	assert_true(dead.to_lower().contains("respawn"), "tells the player what to do")
+
+	var not_dead := ProtocolErrors.user_message(ProtocolMessages.CODE_CHARACTER_NOT_DEAD)
+	assert_true(not_dead.length() > 0)
+	assert_false(not_dead.contains(ProtocolMessages.CODE_CHARACTER_NOT_DEAD))

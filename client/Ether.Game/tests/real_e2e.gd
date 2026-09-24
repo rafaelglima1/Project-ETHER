@@ -17,7 +17,7 @@ extends SceneTree
 ##
 ## Exit codes: 0 = full flow PASS, 1 = flow FAIL, 2 = not configured (BLOCKED).
 
-enum Stage { IDLE, LOGIN, CHARACTERS, GAME_TOKEN, WS_AUTH, WORLD_ENTER, MOVE, COMBAT, DONE }
+enum Stage { IDLE, LOGIN, CHARACTERS, GAME_TOKEN, WS_AUTH, WORLD_ENTER, RESPAWN_CHECK, MOVE, COMBAT, DONE }
 
 const STEP_TIMEOUT := 20.0
 const TOTAL_TIMEOUT := 90.0
@@ -46,6 +46,8 @@ var _next_attack_at := 0.0
 var _attacks := 0
 var _started := false
 var _finished := false
+var _respawn_rejected := false
+var _pending_move := Vector2i.ZERO
 
 
 func _initialize() -> void:
@@ -175,12 +177,12 @@ func _on_event(name: String, payload: Dictionary) -> void:
 		_network.enter_world()
 	elif name == ProtocolMessages.EVT_MOVEMENT_ACCEPTED:
 		_position = Vector2i(int(payload.get("x", 0)), int(payload.get("y", 0)))
-		print("REAL_E2E: 6/9 movement.accepted (%d,%d)" % [_position.x, _position.y])
+		print("REAL_E2E: 8/10 movement.accepted (%d,%d)" % [_position.x, _position.y])
 		if _creature_id == "":
 			_pass("world + movement")
 			return
 		_enter_stage(Stage.COMBAT, "combat.attack")
-		print("REAL_E2E: 7/9 combat.attack -> %s" % _creature_id)
+		print("REAL_E2E: 9/10 combat.attack -> %s" % _creature_id)
 		_next_attack_at = _now() + ATTACK_INTERVAL
 	elif name == ProtocolMessages.EVT_COMBAT_RESULT:
 		var target_id := String(payload.get("targetId", ""))
@@ -193,19 +195,19 @@ func _on_event(name: String, payload: Dictionary) -> void:
 			int(payload.get("targetMaxHealth", 0)),
 		])
 		if bool(payload.get("targetDefeated", false)):
-			print("REAL_E2E: 8/9 creature defeated after %d attack(s)" % _attacks)
+			print("REAL_E2E: 10/10 creature defeated after %d attack(s)" % _attacks)
 			var loot_count := 0
 			var loot_raw: Variant = payload.get(ProtocolMessages.FIELD_LOOT, [])
 			if typeof(loot_raw) == TYPE_ARRAY:
 				var loot_arr: Array = loot_raw
 				loot_count = loot_arr.size()
-			print("REAL_E2E: 9/9 reward experienceGained=%d level=%d experience=%d loot=%d" % [
+			print("REAL_E2E:    reward experienceGained=%d level=%d experience=%d loot=%d" % [
 				int(payload.get(ProtocolMessages.FIELD_EXPERIENCE_GAINED, 0)),
 				int(payload.get(ProtocolMessages.FIELD_LEVEL, 0)),
 				int(payload.get(ProtocolMessages.FIELD_EXPERIENCE, 0)),
 				loot_count,
 			])
-			_pass("full first-playable loop")
+			_pass("full first-playable loop (respawn contract verified=%s)" % str(_respawn_rejected))
 
 
 func _on_snapshot(payload: Dictionary) -> void:
@@ -218,7 +220,7 @@ func _on_snapshot(payload: Dictionary) -> void:
 	if typeof(creatures_raw) == TYPE_ARRAY:
 		var creatures_arr: Array = creatures_raw
 		creature_count = creatures_arr.size()
-	print("REAL_E2E: 5/9 world.snapshot ok (mapId=%d %dx%d player=%s @ %d,%d, creatures=%d)" % [
+	print("REAL_E2E: 5/10 world.snapshot ok (mapId=%d %dx%d player=%s @ %d,%d, creatures=%d)" % [
 		_map_id,
 		int(payload.get("width", 0)),
 		int(payload.get("height", 0)),
@@ -233,10 +235,14 @@ func _on_snapshot(payload: Dictionary) -> void:
 	if _creature_id != "":
 		var creature_position := _creature_position(payload.get("creatures", []), _creature_id)
 		target = Vector2i(maxi(0, creature_position.x - 1), creature_position.y)
+	_pending_move = target
 
-	_enter_stage(Stage.MOVE, "movement.move")
-	print("REAL_E2E:    movement.move -> (%d,%d)" % [target.x, target.y])
-	_network.move_to(target.x, target.y)
+	# Validate the frozen character.respawn command against the real server: a
+	# living character must be rejected with CHARACTER_NOT_DEAD (proves command
+	# encoding, requestId, sequence and error routing end-to-end).
+	_enter_stage(Stage.RESPAWN_CHECK, "character.respawn (negative)")
+	print("REAL_E2E: 6/10 character.respawn sent (expect CHARACTER_NOT_DEAD)")
+	_network.respawn_character()
 
 
 func _nearest_creature(creatures: Variant, origin: Vector2i) -> String:
@@ -267,7 +273,20 @@ func _creature_position(creatures: Variant, creature_id: String) -> Vector2i:
 func _on_error(name: String, code: String, _message: String) -> void:
 	if _finished:
 		return
+	if _stage == Stage.RESPAWN_CHECK and name == ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED \
+			and code == ProtocolMessages.CODE_CHARACTER_NOT_DEAD:
+		_respawn_rejected = true
+		print("REAL_E2E: 7/10 character.respawn correctly rejected (%s) — contract verified on Oracle" % code)
+		_begin_movement()
+		return
 	_fail("server error '%s' (%s)" % [name, code])
+
+
+## Starts the movement stage (shared by the snapshot path and the respawn check).
+func _begin_movement() -> void:
+	_enter_stage(Stage.MOVE, "movement.move")
+	print("REAL_E2E:    movement.move -> (%d,%d)" % [_pending_move.x, _pending_move.y])
+	_network.move_to(_pending_move.x, _pending_move.y)
 
 
 # --- Helpers ------------------------------------------------------------------
@@ -285,6 +304,7 @@ func _stage_name() -> String:
 		Stage.GAME_TOKEN: return "game-token"
 		Stage.WS_AUTH: return "websocket authenticate"
 		Stage.WORLD_ENTER: return "world.enter"
+		Stage.RESPAWN_CHECK: return "character.respawn"
 		Stage.MOVE: return "movement.move"
 		Stage.COMBAT: return "combat.attack"
 		Stage.DONE: return "done"

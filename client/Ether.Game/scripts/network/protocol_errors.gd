@@ -64,4 +64,8 @@ static func user_message(code: String) -> String:
 		return "That ability is still on cooldown."
 	elif code == ProtocolMessages.CODE_SELF_TARGET:
 		return "You cannot target yourself."
+	elif code == ProtocolMessages.CODE_CHARACTER_DEAD:
+		return "Your character is dead. Respawn first."
+	elif code == ProtocolMessages.CODE_CHARACTER_NOT_DEAD:
+		return "Your character is not dead."
 	return FALLBACK

@@ -21,6 +21,7 @@ const CMD_GAME_AUTHENTICATE := "game.authenticate"
 const CMD_WORLD_ENTER := "world.enter"
 const CMD_MOVEMENT_MOVE := "movement.move"
 const CMD_COMBAT_ATTACK := "combat.attack"
+const CMD_CHARACTER_RESPAWN := "character.respawn"
 const CMD_SYSTEM_PING := "system.ping"
 
 # --- Server -> Client events ---
@@ -39,6 +40,7 @@ const ERR_MOVEMENT_REJECTED := "movement.rejected"
 const ERR_WORLD_ENTER_REJECTED := "world.enter.rejected"
 const ERR_GAME_AUTHENTICATE_REJECTED := "game.authenticate.rejected"
 const ERR_COMBAT_REJECTED := "combat.rejected"
+const ERR_CHARACTER_RESPAWN_REJECTED := "character.respawn.rejected"
 
 # --- Deterministic error codes (ProtocolErrorCodes on the server) ---
 const CODE_INVALID_ENVELOPE := "INVALID_ENVELOPE"
@@ -71,6 +73,10 @@ const CODE_ATTACKER_DEAD := "ATTACKER_DEAD"
 const CODE_OUT_OF_RANGE := "OUT_OF_RANGE"
 const CODE_COOLDOWN_ACTIVE := "COOLDOWN_ACTIVE"
 const CODE_SELF_TARGET := "SELF_TARGET"
+
+# --- Death / respawn error codes ---
+const CODE_CHARACTER_DEAD := "CHARACTER_DEAD"
+const CODE_CHARACTER_NOT_DEAD := "CHARACTER_NOT_DEAD"
 
 # --- Content keys (mirror the M5 catalog until the content pipeline lands) ---
 const ABILITY_BASIC_ATTACK := "warrior.basic_attack"

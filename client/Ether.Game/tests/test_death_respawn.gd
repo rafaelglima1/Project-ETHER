@@ -16,7 +16,7 @@ var snapshots: Array = []
 var errors: Array = []
 
 
-func _setup(respawn_seconds: float = 3.0) -> void:
+func _setup() -> void:
 	network = NetworkClient.new()
 	world = WorldState.new()
 	events = []
@@ -30,7 +30,6 @@ func _setup(respawn_seconds: float = 3.0) -> void:
 	backend = network.transport().backend()
 	backend.set_ai_enabled(false)
 	backend.set_critical_enabled(false)
-	backend.set_respawn_delay(respawn_seconds)
 	backend.issue_game_token(String(backend.characters[0]["characterId"]))
 
 	network.event_received.connect(_on_event)
@@ -198,14 +197,15 @@ func test_mock_server_rejects_attack_while_dead() -> void:
 		"attack rejected while dead (server authority)")
 
 
-func test_mock_respawn_emits_snapshot_and_client_recovers() -> void:
-	_setup(0.05)
+func test_mock_respawn_command_recovers_player() -> void:
+	_setup()
 	_run_to_world()
 	_kill_player_in_mirror()
+	backend.force_player_dead()
 	assert_true(world.is_player_dead())
 
-	# Server-side respawn fires on the next tick; reported as a world.snapshot.
-	backend.schedule_respawn_now()
+	# Canonical flow: client requests respawn, server replies with world.snapshot.
+	network.respawn_character()
 	_pump(0.5)
 
 	assert_true(snapshots.size() >= 2, "respawn snapshot received")
@@ -215,25 +215,74 @@ func test_mock_respawn_emits_snapshot_and_client_recovers() -> void:
 	assert_true(world.can_player_act(), "controls restored")
 
 
+func test_respawn_rejected_when_not_dead() -> void:
+	_setup()
+	_run_to_world()
+	network.respawn_character()
+	_pump(0.3)
+	assert_true(
+		_has_error(ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED, ProtocolMessages.CODE_CHARACTER_NOT_DEAD),
+		"server refuses to respawn a living character")
+	assert_true(world.can_player_act(), "player unaffected")
+
+
+func test_world_enter_rejected_for_dead_character() -> void:
+	_setup()
+	network.authenticate(TOKEN)
+	_pump(0.2)
+	network.mark_authenticated()
+	backend.force_player_dead()
+	network.enter_world()
+	_pump(0.3)
+	assert_true(
+		_has_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_CHARACTER_DEAD),
+		"world.enter rejected while dead")
+	assert_eq(network.state.current(), AppState.State.AUTHENTICATED, "did not enter world")
+
+	# The client then requests respawn -> snapshot -> alive and in world.
+	network.respawn_character()
+	_pump(0.3)
+	network.mark_in_world()
+	assert_true(snapshots.size() >= 1, "snapshot after respawn")
+	assert_false(world.is_player_dead())
+	assert_eq(network.state.current(), AppState.State.IN_WORLD)
+
+
 # --- Reconnect scenarios ------------------------------------------------------
 
-func test_reconnect_after_death_restores_alive_player() -> void:
+func test_reconnect_while_dead_requires_respawn_then_recovers() -> void:
 	_setup()
 	_run_to_world()
 	_kill_player_in_mirror()
+	backend.force_player_dead()
 	assert_true(world.is_player_dead())
 
 	network.disconnect_from_server()
 	_pump(0.2)
 	network.connect_to_server()
 	_pump(0.2)
-	_run_to_world()
 
-	assert_true(snapshots.size() >= 2, "fresh snapshot after reconnect")
+	# Re-authenticate and try to enter — the server rejects a dead character.
+	network.authenticate(TOKEN)
+	_pump(0.2)
+	network.mark_authenticated()
+	network.enter_world()
+	_pump(0.3)
+	assert_true(
+		_has_error(ProtocolMessages.ERR_WORLD_ENTER_REJECTED, ProtocolMessages.CODE_CHARACTER_DEAD),
+		"reconnect world.enter rejected while dead")
+
+	# Client requests the canonical respawn; the fresh snapshot clears stale state.
+	network.respawn_character()
+	_pump(0.3)
+	network.mark_in_world()
+
+	assert_true(snapshots.size() >= 2, "fresh snapshot after reconnect+respawn")
 	assert_false(world.is_player_dead(), "stale death replaced by snapshot")
-	assert_eq(int(world.player.get("hp", 0)), 100)
-	assert_true(world.can_player_act())
+	assert_eq(int(world.player.get("hp", 0)), 100, "authoritative HP restored")
+	assert_true(world.can_player_act(), "input restored")
 	assert_eq(world.creature_count(), 3, "world restored")
+	assert_eq(network.state.current(), AppState.State.IN_WORLD, "back in world")
 
 
 func test_duplicate_world_enter_returns_rejection_and_world_survives() -> void:
@@ -255,3 +304,107 @@ func _has_error(name: String, code: String) -> bool:
 		if entry["name"] == name and entry["code"] == code:
 			return true
 	return false
+
+
+# --- Command-level input gating (real GameClient autoload) ---------------------
+
+## Drives the real GameClient autoload and proves that no movement / attack /
+## respawn command is emitted while dead (the sequence counter only advances
+## when CommandSender actually builds a command).
+func test_game_client_emits_no_commands_while_dead() -> void:
+	var game: Node = TestCase.tree.root.get_node_or_null("/root/GameClient")
+	if game == null or not game.has_method("request_move"):
+		return
+
+	var saved_world: WorldState = game.world_state
+	var saved_state: int = game.network.state.current()
+	game.world_state = WorldState.new()
+	game.network.state.set_current(AppState.State.IN_WORLD)
+	game.world_state.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "gate", "x": 1, "y": 1, "state": "InWorld", "health": 100, "maxHealth": 100},
+		"creatures": [{"creatureId": "c1", "name": "Slime", "x": 2, "y": 1, "health": 10, "maxHealth": 10}],
+	})
+	var sender: CommandSender = game.network.sender
+	var sequence: int
+
+	# Alive: movement / attack / respawn-forbidden gate behaviour.
+	sequence = sender.current_sequence()
+	game.request_move(2, 1)
+	assert_true(sender.current_sequence() > sequence, "alive: movement command emitted")
+
+	sequence = sender.current_sequence()
+	game.request_attack("c1")
+	assert_true(sender.current_sequence() > sequence, "alive: attack command emitted")
+
+	sequence = sender.current_sequence()
+	game.request_respawn()
+	assert_eq(sender.current_sequence(), sequence, "alive: respawn refused (not dead)")
+
+	# Dead: no movement, no attack, respawn allowed (one command).
+	game.world_state.apply_combat_result({
+		"attackerId": "c1", "targetId": "gate",
+		"targetHealth": 0, "targetMaxHealth": 100,
+		"targetState": "Dead", "targetDefeated": true,
+	})
+
+	sequence = sender.current_sequence()
+	game.request_move(3, 1)
+	assert_eq(sender.current_sequence(), sequence, "dead: no movement command")
+
+	sequence = sender.current_sequence()
+	game.request_attack("c1")
+	assert_eq(sender.current_sequence(), sequence, "dead: no attack command")
+
+	sequence = sender.current_sequence()
+	game.request_respawn()
+	assert_true(sender.current_sequence() > sequence, "dead: respawn command emitted")
+
+	# Restore global autoload state for the rest of the suite.
+	game.world_state = saved_world
+	game.network.state.set_current(saved_state)
+
+
+func test_respawn_in_flight_blocks_duplicate_commands() -> void:
+	_setup()
+	_run_to_world()
+	backend.force_player_dead()
+	var sender: CommandSender = network.sender
+	var before := sender.current_sequence()
+
+	var first := network.respawn_character()
+	var second := network.respawn_character()
+
+	assert_ne(first, "", "first respawn sent")
+	assert_eq(second, "", "second respawn blocked while pending")
+	assert_eq(sender.current_sequence(), before + 1, "exactly one command emitted")
+	assert_true(network.resawn_pending(), "pending until server replies")
+
+	_pump(0.4)
+	assert_false(network.resawn_pending(), "snapshot clears pending")
+
+
+func test_hud_death_overlay_and_button_gating() -> void:
+	if TestCase.tree == null:
+		return
+	var hud: Node = load("res://scripts/ui/hud.gd").new()
+	hud._ready()
+
+	assert_false(hud._death_overlay.visible, "hidden while alive")
+	assert_false(hud._respawn_button.visible, "respawn hidden while alive")
+	assert_eq(hud._respawn_button.pressed.get_connections().size(), 1, "respawn button wired")
+
+	hud._apply_death_state(true)
+	assert_true(hud._death_overlay.visible, "overlay shown while dead")
+	assert_true(hud._death_panel.visible, "panel shown while dead")
+	assert_true(hud._respawn_button.visible, "respawn button shown while dead")
+	assert_false(hud._respawn_button.disabled, "respawn button clickable")
+	assert_true(hud._attack_button.disabled, "attack disabled while dead")
+	assert_true(hud._power_button.disabled, "power strike disabled while dead")
+
+	hud._apply_death_state(false)
+	assert_false(hud._death_overlay.visible, "overlay cleared")
+	assert_false(hud._attack_button.disabled, "attack re-enabled")
+	assert_false(hud._power_button.disabled, "power strike re-enabled")
+
+	hud.free()

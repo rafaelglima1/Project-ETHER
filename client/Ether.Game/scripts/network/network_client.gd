@@ -27,6 +27,9 @@ var heartbeat: HeartbeatManager = null
 var reconnect: ReconnectManager = null
 
 var last_rtt_ms: int = -1
+## True while a character.respawn is awaiting the server's reply; blocks
+## repeated taps from issuing duplicate commands (cleared on snapshot/open).
+var _respawn_pending := false
 
 var _transport: Transport = null
 var _endpoint: String = ""
@@ -143,6 +146,23 @@ func attack(ability_id: String, target_id: String, target_type: String) -> Strin
 	})
 
 
+## Asks the server to respawn this session's dead character. The server decides
+## death/HP/spawn point and replies with a canonical world.snapshot. While a
+## respawn is in flight a repeated call is ignored (no duplicate command).
+func respawn_character() -> String:
+	if _respawn_pending:
+		log_message.emit("Respawn already pending; ignoring duplicate.")
+		return ""
+	var request_id := sender.send(ProtocolMessages.CMD_CHARACTER_RESPAWN, {})
+	if request_id != "":
+		_respawn_pending = true
+	return request_id
+
+
+func respawn_pending() -> bool:
+	return _respawn_pending
+
+
 func ping() -> String:
 	return sender.send(ProtocolMessages.CMD_SYSTEM_PING, {})
 
@@ -177,6 +197,7 @@ func _process(delta: float) -> void:
 # --- Transport callbacks ------------------------------------------------------
 
 func _on_opened() -> void:
+	_respawn_pending = false
 	if heartbeat != null:
 		heartbeat.reset()
 	if _reconnecting:
@@ -214,6 +235,13 @@ func _on_message(text: String) -> void:
 	var envelope: Dictionary = result["envelope"]
 	if String(envelope.get("name", "")) == ProtocolMessages.EVT_SYSTEM_PONG:
 		_handle_pong(String(envelope.get("requestId", "")))
+	if String(envelope.get("name", "")) == ProtocolMessages.EVT_WORLD_SNAPSHOT:
+		# Authoritative confirmation: respawn completed (or world loaded).
+		_respawn_pending = false
+	if envelope.get("type", "") == ProtocolMessages.TYPE_ERROR and \
+			String(envelope.get("name", "")) == ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED:
+		# A rejected respawn must not block future attempts.
+		_respawn_pending = false
 	dispatcher.dispatch(envelope)
 
 

@@ -21,7 +21,9 @@ var _attack_button: Button
 var _power_button: Button
 var _inventory_list: VBoxContainer
 var _death_overlay: ColorRect
+var _death_panel: Control
 var _death_message: Label
+var _respawn_button: Button
 
 
 func _ready() -> void:
@@ -157,8 +159,8 @@ func _build() -> void:
 	move_hint.modulate = Color(0.75, 0.82, 0.92)
 	root.add_child(move_hint)
 
-	# Minimal death state: covers the screen (blocks stray taps) but stays
-	# translucent so the world remains visible. Hidden until the server says so.
+	# Minimal death state: the overlay blocks stray taps but stays translucent so
+	# the world remains visible; the panel carries the message + Respawn action.
 	_death_overlay = ColorRect.new()
 	_death_overlay.color = Color(0.0, 0.0, 0.0, 0.55)
 	_death_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -166,16 +168,30 @@ func _build() -> void:
 	_death_overlay.visible = false
 	add_child(_death_overlay)
 
+	_death_panel = CenterContainer.new()
+	_death_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_death_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_death_panel.visible = false
+	add_child(_death_panel)
+
+	var death_column := VBoxContainer.new()
+	death_column.add_theme_constant_override("separation", 20)
+	_death_panel.add_child(death_column)
+
 	_death_message = Label.new()
-	_death_message.text = "YOU HAVE DIED\n\nWaiting for respawn…"
+	_death_message.text = "YOU HAVE DIED"
 	_death_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_death_message.add_theme_font_size_override("font_size", 34)
 	_death_message.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3))
-	_death_message.set_anchors_preset(Control.PRESET_CENTER)
-	_death_message.grow_horizontal = Control.GROW_DIRECTION_BOTH
-	_death_message.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_death_message.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(_death_message)
+	death_column.add_child(_death_message)
+
+	_respawn_button = Button.new()
+	_respawn_button.text = "Respawn"
+	_respawn_button.custom_minimum_size = Vector2(280, 92)
+	_respawn_button.add_theme_font_size_override("font_size", 26)
+	_respawn_button.visible = false
+	_respawn_button.pressed.connect(_on_respawn_pressed)
+	death_column.add_child(_respawn_button)
 
 
 func _on_attack() -> void:
@@ -291,6 +307,11 @@ func _on_player_died() -> void:
 	_apply_death_state(true)
 
 
+func _on_respawn_pressed() -> void:
+	if game != null and game.has_method("request_respawn"):
+		game.request_respawn()
+
+
 func _on_player_respawned() -> void:
 	_apply_death_state(false)
 	_refresh()
@@ -301,11 +322,14 @@ func _on_player_respawned() -> void:
 func _apply_death_state(dead: bool) -> void:
 	if _death_overlay != null:
 		_death_overlay.visible = dead
-	if _death_message != null:
-		_death_message.visible = dead
+	if _death_panel != null:
+		_death_panel.visible = dead
+	if _respawn_button != null:
+		_respawn_button.visible = dead
+		_respawn_button.disabled = not dead
 	if _attack_button != null:
 		_attack_button.disabled = dead
 	if _power_button != null:
 		_power_button.disabled = dead
 	if dead:
-		_on_feedback("You have died. Waiting for respawn...")
+		_on_feedback("You have died. Respawn to continue.")

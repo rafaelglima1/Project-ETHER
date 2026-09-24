@@ -48,6 +48,7 @@ var _autoplay := false
 var _autoplay_started := false
 var _autoplay_created := false
 var _player_was_dead := false
+var _auto_respawn_pending := false
 
 
 func _ready() -> void:
@@ -219,6 +220,16 @@ func request_attack_ability(ability_id: String) -> void:
 	request_attack(selected_target_id, ability_id)
 
 
+## Requests a server-authoritative respawn (only meaningful while dead). The
+## server decides whether to respawn and replies with world.snapshot.
+func request_respawn() -> void:
+	if not world_state.is_player_dead():
+		feedback.emit("You are not dead.")
+		return
+	log_line("Requesting respawn.")
+	network.respawn_character()
+
+
 func request_interact(_target_id: String) -> void:
 	feedback.emit("Nothing to interact with yet.")
 
@@ -356,6 +367,7 @@ func _on_pong(rtt_ms: int) -> void:
 
 func _on_snapshot(payload: Dictionary) -> void:
 	world_state.apply_snapshot(payload)
+	_auto_respawn_pending = false
 	clear_target()
 	_sync_player_life_state()
 	var player := world_state.player
@@ -511,6 +523,15 @@ func _on_protocol_error(name: String, code: String, _server_message: String) -> 
 	elif name == ProtocolMessages.ERR_WORLD_ENTER_REJECTED:
 		if code == ProtocolMessages.CODE_NOT_AUTHENTICATED and client_state.game_token != "":
 			network.authenticate(client_state.game_token)
+		elif code == ProtocolMessages.CODE_CHARACTER_DEAD and not _auto_respawn_pending:
+			# Reconnecting with a dead character: ask the server to respawn.
+			# HP/position still come only from the server's world.snapshot reply.
+			_auto_respawn_pending = true
+			log_line("Character is dead on world.enter; requesting respawn.")
+			network.respawn_character()
+	elif name == ProtocolMessages.ERR_CHARACTER_RESPAWN_REJECTED:
+		_auto_respawn_pending = false
+		log_line("Respawn rejected (%s)." % code)
 
 
 # --- Autoplay (dev/smoke only, gated by ETHER_AUTOPLAY) -----------------------
@@ -557,7 +578,30 @@ func _autoplay_smoke() -> void:
 		int(world_state.player.get("level", 1)),
 		int(world_state.player.get("experience", 0)),
 		client_state.inventory.size(),
-		str(bool(world_state.player.get("dead", false))),
+		str(world_state.is_player_dead()),
+		world_state.creature_count(),
+	])
+
+	# Wait for the remaining creatures to (possibly) finish the player off, then
+	# prove the full server-authoritative died -> respawned loop in the mock.
+	for i in range(40):
+		if world_state.is_player_dead():
+			break
+		await get_tree().create_timer(0.5).timeout
+	if not world_state.is_player_dead():
+		log_line("Autoplay: player survived; skipping respawn check.")
+		return
+
+	log_line("Autoplay: player died -> requesting respawn (server-authoritative).")
+	request_respawn()
+	for i in range(40):
+		if not world_state.is_player_dead():
+			break
+		await get_tree().create_timer(0.5).timeout
+	log_line("Autoplay after respawn: dead=%s hp=%d pos=%s creatures=%d" % [
+		str(world_state.is_player_dead()),
+		int(world_state.player.get("hp", 0)),
+		str(world_state.player_position()),
 		world_state.creature_count(),
 	])
 
