@@ -449,13 +449,11 @@ Therefore the expected client-validation order is:
 
 Do not default to emulator-based workflows.
 
-## 25. CURRENT KNOWN PRODUCT SPEC GAP
+## 25. ETHER-021 EQUIPMENT STATUS
 
-At the time Protocol v2.0 was established, ETHER-021 Equipment cannot safely begin because equipment modifier semantics and effective-stat mapping are not canonically defined.
-
-An agent must re-check repository state before relying on this note because the decision may later be resolved.
-
-This note is informational, not a permanent blocker.
+Equipment Model v1 is product-approved in [ADR-0008](../decisions/ADR-0008-equipment-model-v1.md).
+ETHER-021 is READY for implementation against that contract and has not yet been
+implemented. Re-check repository state and the backend handoff before starting it.
 
 ## 26. SUCCESS CRITERION FOR AUTONOMOUS ENGINEERING
 

@@ -63,7 +63,9 @@ owner_character_id, location_type) with `quantity > 0` and a `Restrict` FK to
 
 At M7, inventory slots/capacity, stacking into existing stacks, equipment,
 trade/market escrow and gold/currency were deferred. The M8 addendum below closes
-capacity and stacking; equipment, trade/market escrow and gold/currency remain deferred.
+capacity and stacking. Equipment semantics are approved in ADR-0008; its runtime
+implementation remains ETHER-021. Trade/market escrow and gold/currency remain
+deferred.
 
 ## M8 addendum — inventory locking and persistence ownership
 
@@ -101,5 +103,5 @@ entries carry `itemDefinitionId`, `name`, `quantity`, `itemInstanceId`.
 ## Deferred
 
 - Gold/currency rewards and economy sinks/sources.
-- Equipment and item use.
+- Equipment runtime implementation (approved product contract: ADR-0008) and item use.
 - Death/respawn penalties (Blueprint `PRODUCT_DECISION_REQUIRED`).

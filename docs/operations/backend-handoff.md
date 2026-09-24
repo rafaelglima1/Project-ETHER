@@ -36,14 +36,18 @@
 
 ## Deferred / next canonical task
 
-- Next: ETHER-021 Equipment (Blueprint v5.0 §28).
-- `SPEC_GAP`: equipment definitions need stat modifiers and a mapping to effective
-  character/combat stats. The Blueprint lists equipment slots and says equipment
-  changes effective attributes, but does not specify modifier data or derived combat
-  formulas. Do not invent item values or formulas.
+- Next: ETHER-021 Equipment (Blueprint v5.0 §28), **READY** under the approved
+  Equipment Model v1 in ADR-0008; runtime implementation has not started.
+- Equipment product semantics for v1 (six slots, item-instance ownership, flat
+  modifiers, effective stats, health, safe-state, inventory swap, death/respawn,
+  starter Warrior items, UX and out-of-scope rules) are canonical in ADR-0008.
+- Equipment definitions and starter item values must be added to the versioned
+  Content Pipeline during ETHER-021; do not hard-code them in gameplay logic.
 - Death penalty remains `PRODUCT_DECISION_REQUIRED` per ADR-0001 D5; it does not block
-  content work or determine the equipment stat contract.
+  ETHER-021's approved equipment contract.
+- The client-owned README still contains the former ETHER-021 `SPEC_GAP` note; it was
+  not edited from the backend scope and should be refreshed by the client owner.
 - Permanent engineering rules and autonomous workflow are now recorded in
   `docs/engineering/ETHER-ENGINEERING-CONSTITUTION.md` and
   `docs/engineering/ETHER-AUTONOMOUS-ENGINEERING-PROTOCOL-V2.md`.
-- Client worktree changes owned by OPENCODE-2 were left untouched and unstaged.
+- No client files were modified by the backend content-pipeline work.

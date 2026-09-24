@@ -16,8 +16,8 @@ Permanent engineering rules and autonomous-agent workflow are defined in the
 ## Status
 
 **Backend status:** M0–M8 are complete, and the canonical content pipeline
-(ETHER-039) is implemented. The next equipment task is held at a documented
-specification gap rather than inventing item stat rules. See the backend handoff
+(ETHER-039) is implemented. Equipment Model v1 is product-approved; ETHER-021 is
+ready for implementation and remains unimplemented. See the backend handoff
 ([`docs/operations/backend-handoff.md`](docs/operations/backend-handoff.md)) and
 [`docs/decisions/`](docs/decisions) for current details.
 
@@ -33,7 +33,7 @@ specification gap rather than inventing item stat rules. See the backend handoff
 | M7 | Progression (XP) + loot + item foundation | ✅ Done |
 | M8 | Inventory (authoritative ownership, capacity, stacking) | ✅ Done |
 | ETHER-039 | Content pipeline and validator for implemented gameplay content | ✅ Done |
-| ETHER-021 | Equipment | ⏸ Spec gap — item modifiers and attribute/combat mapping are undefined |
+| ETHER-021 | Equipment Model v1 runtime implementation | 🟡 Ready — product contract in ADR-0008 |
 
 
 ### Realtime (GameServer WebSocket)

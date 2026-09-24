@@ -40,10 +40,9 @@ product decision.
 
 This pipeline validates only implemented content types. NPCs, quests, tile-level
 map collision, dialogue and equipment definitions remain future content additions.
-The Blueprint defines equipment slots but not equipment stat values or how those
-values map onto the current provisional level-based combat stats; ETHER-021 stays a
-`SPEC_GAP` until that contract is defined. No item modifiers or balance values are
-invented here.
+Equipment Model v1 is now approved in ADR-0008. ETHER-021 will extend the item
+content contract with its equipment slot and flat modifiers; this ETHER-039 task does
+not implement those definitions or runtime behavior.
 
 ## Consequences
 
