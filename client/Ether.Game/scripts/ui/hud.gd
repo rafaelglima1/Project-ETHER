@@ -20,6 +20,8 @@ var _feedback_label: Label
 var _attack_button: Button
 var _power_button: Button
 var _inventory_list: VBoxContainer
+var _death_overlay: ColorRect
+var _death_message: Label
 
 
 func _ready() -> void:
@@ -36,7 +38,13 @@ func _ready() -> void:
 			game.experience_changed.connect(_on_experience)
 		if game.has_signal("loot_received"):
 			game.loot_received.connect(_on_loot)
+		if game.has_signal("player_died"):
+			game.player_died.connect(_on_player_died)
+		if game.has_signal("player_respawned"):
+			game.player_respawned.connect(_on_player_respawned)
 		game.world_state.player_updated.connect(_refresh)
+		_refresh()
+		_apply_death_state(game.is_player_dead() if game.has_method("is_player_dead") else false)
 		_refresh()
 
 
@@ -149,6 +157,26 @@ func _build() -> void:
 	move_hint.modulate = Color(0.75, 0.82, 0.92)
 	root.add_child(move_hint)
 
+	# Minimal death state: covers the screen (blocks stray taps) but stays
+	# translucent so the world remains visible. Hidden until the server says so.
+	_death_overlay = ColorRect.new()
+	_death_overlay.color = Color(0.0, 0.0, 0.0, 0.55)
+	_death_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_death_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_death_overlay.visible = false
+	add_child(_death_overlay)
+
+	_death_message = Label.new()
+	_death_message.text = "YOU HAVE DIED\n\nWaiting for respawn…"
+	_death_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_death_message.add_theme_font_size_override("font_size", 34)
+	_death_message.add_theme_color_override("font_color", Color(1.0, 0.35, 0.3))
+	_death_message.set_anchors_preset(Control.PRESET_CENTER)
+	_death_message.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_death_message.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_death_message.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_death_message)
+
 
 func _on_attack() -> void:
 	if game != null:
@@ -257,3 +285,27 @@ func _on_inventory(items: Array) -> void:
 		var label := Label.new()
 		label.text = "%s x%d" % [String(item.get("name", "Item")), int(item.get("quantity", 1))]
 		_inventory_list.add_child(label)
+
+
+func _on_player_died() -> void:
+	_apply_death_state(true)
+
+
+func _on_player_respawned() -> void:
+	_apply_death_state(false)
+	_refresh()
+
+
+## Shows/hides the death overlay and gates the action buttons. HP and position
+## are never faked here — they come from the server.
+func _apply_death_state(dead: bool) -> void:
+	if _death_overlay != null:
+		_death_overlay.visible = dead
+	if _death_message != null:
+		_death_message.visible = dead
+	if _attack_button != null:
+		_attack_button.disabled = dead
+	if _power_button != null:
+		_power_button.disabled = dead
+	if dead:
+		_on_feedback("You have died. Waiting for respawn...")

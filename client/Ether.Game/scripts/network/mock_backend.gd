@@ -56,6 +56,9 @@ var characters: Array = []
 var ai_enabled := true
 var criticals_enabled := true
 var loot_guaranteed := false
+## Seconds after death before the mock server respawns the player (server role).
+var respawn_delay := 3.0
+var _respawn_at := -1.0
 
 var _state: int = STATE_CONNECTING
 var _outbound_sequence := 0
@@ -90,6 +93,7 @@ func reset() -> void:
 	_player_level = 1
 	_player_xp = 0
 	_player_dead = false
+	_respawn_at = -1.0
 	_ability_ready_at = {}
 	_creatures = {}
 	session_id = _new_guid()
@@ -122,6 +126,23 @@ func set_loot_guaranteed(enabled: bool) -> void:
 	loot_guaranteed = enabled
 
 
+func set_respawn_delay(seconds: float) -> void:
+	respawn_delay = maxf(0.0, seconds)
+
+
+## Test hook: force the mock server-side player into the dead state.
+func force_player_dead() -> void:
+	_player_dead = true
+	_player_hp = 0
+	_respawn_at = _clock + respawn_delay
+
+
+## Test hook: schedule an immediate respawn on the next tick.
+func schedule_respawn_now() -> void:
+	_player_dead = true
+	_respawn_at = _clock
+
+
 # --- Transport-facing API -----------------------------------------------------
 
 func on_connect() -> Array:
@@ -136,9 +157,27 @@ func on_disconnect() -> void:
 
 func tick(delta: float) -> Array:
 	_clock += delta
-	if not ai_enabled or _state != STATE_IN_WORLD:
+	if _state != STATE_IN_WORLD:
 		return []
-	return _run_creature_ai()
+
+	var out: Array = []
+	# Respawn is independent of AI (it is server-role recovery, not AI behaviour).
+	if _player_dead and _respawn_at >= 0.0 and _clock >= _respawn_at:
+		_respawn_player()
+		out.append(_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), "", 0))
+	if ai_enabled:
+		out.append_array(_run_creature_ai())
+	return out
+
+
+## Server-role respawn: authoritative HP/position restored, reported to the
+## client through a canonical world.snapshot (no invented message).
+func _respawn_player() -> void:
+	_player_dead = false
+	_player_hp = PLAYER_MAX_HEALTH
+	_player_x = START_X
+	_player_y = START_Y
+	_respawn_at = -1.0
 
 
 ## Accepts a raw command string and returns an Array of envelope dictionaries.
@@ -210,12 +249,15 @@ func _handle_enter_world(request_id: String, sequence: int) -> Array:
 	_player_level = 1
 	_player_xp = 0
 	_player_dead = false
+	_respawn_at = -1.0
 	_spawn_creatures()
 	return [_event(ProtocolMessages.EVT_WORLD_SNAPSHOT, _snapshot_payload(), request_id, sequence)]
 
 
 func _handle_move(payload: Dictionary, request_id: String, sequence: int) -> Array:
 	if _state != STATE_IN_WORLD:
+		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_NOT_IN_WORLD, "Character is not in the world.", request_id, sequence)]
+	if _player_dead:
 		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_NOT_IN_WORLD, "Character is not in the world.", request_id, sequence)]
 	if not payload.has("x") or not payload.has("y"):
 		return [_error(ProtocolMessages.ERR_MOVEMENT_REJECTED, ProtocolMessages.CODE_INVALID_PAYLOAD, "Movement payload is invalid.", request_id, sequence)]
@@ -415,6 +457,7 @@ func _creature_attacks_player(creature: Dictionary, out: Array) -> void:
 	_player_hp = maxi(0, _player_hp - int(hit["damage"]))
 	if _player_hp <= 0:
 		_player_dead = true
+		_respawn_at = _clock + respawn_delay
 
 	out.append(_event(ProtocolMessages.EVT_COMBAT_RESULT, {
 		"attackerId": creature["id"],

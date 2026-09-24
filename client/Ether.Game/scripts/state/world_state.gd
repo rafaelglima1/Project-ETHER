@@ -149,6 +149,21 @@ static func is_dead_state(state: String) -> bool:
 	return state == ProtocolMessages.CREATURE_STATE_DEAD or state == ProtocolMessages.CREATURE_STATE_RESPAWNING
 
 
+## True when the local player's mirrored state is Dead/Respawning.
+func is_player_dead() -> bool:
+	if player.is_empty():
+		return false
+	if bool(player.get("dead", false)):
+		return true
+	return is_dead_state(String(player.get("state", "")))
+
+
+## True when the local player may act (move/attack). The server stays the final
+## authority; this only avoids sending commands that would be rejected.
+func can_player_act() -> bool:
+	return not player.is_empty() and not is_player_dead()
+
+
 func has_entity(id: String) -> bool:
 	return entities.has(id)
 
@@ -222,6 +237,10 @@ func _update_player(data: Dictionary) -> void:
 		_set_player(data)
 		return
 	player.merge(data, true)
+	# Keep the death flag consistent with an authoritative state change (e.g. a
+	# respawn delta that carries InWorld/Combat but no explicit `dead` field).
+	if data.has("state") and not data.has("dead"):
+		player["dead"] = is_dead_state(String(player.get("state", "")))
 	player_id = String(player.get("id", player_id))
 	if player_id != "":
 		entities[player_id] = player

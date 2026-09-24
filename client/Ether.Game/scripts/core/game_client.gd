@@ -25,6 +25,8 @@ signal combat_result(attacker_id: String, target_id: String, damage: int, critic
 signal creature_defeated(creature_id: String)
 signal experience_changed(level: int, experience: int, gained: int, levels_gained: int)
 signal loot_received(items: Array)
+signal player_died
+signal player_respawned
 
 var config: ClientConfig = null
 var network: NetworkClient = null
@@ -45,6 +47,7 @@ var _mode := "mock"
 var _autoplay := false
 var _autoplay_started := false
 var _autoplay_created := false
+var _player_was_dead := false
 
 
 func _ready() -> void:
@@ -148,8 +151,33 @@ func request_enter_world() -> void:
 
 
 func request_move(x: int, y: int) -> void:
-	if network.state.current() == AppState.State.IN_WORLD:
-		network.move_to(x, y)
+	if network.state.current() != AppState.State.IN_WORLD:
+		return
+	if world_state.is_player_dead():
+		feedback.emit("You are dead.")
+		return
+	network.move_to(x, y)
+
+
+## True when the local player is mirrored as dead (server-authoritative).
+func is_player_dead() -> bool:
+	return world_state.is_player_dead()
+
+
+## Emits death/respawn transitions exactly once, based on the authoritative
+## mirrored state. Called after any update that can change the player's life
+## state (combat result, snapshot, movement).
+func _sync_player_life_state() -> void:
+	var dead := world_state.is_player_dead()
+	if dead and not _player_was_dead:
+		_player_was_dead = true
+		clear_target()
+		log_line("Player died.")
+		player_died.emit()
+	elif not dead and _player_was_dead:
+		_player_was_dead = false
+		log_line("Player respawned (state=%s)." % String(world_state.player.get("state", "")))
+		player_respawned.emit()
 
 
 ## Selects a target entity for the HUD/attack assist. Selection is client-side
@@ -241,6 +269,7 @@ func debug_snapshot() -> Dictionary:
 		"position": "%d, %d" % [int(world_state.player.get("x", 0)), int(world_state.player.get("y", 0))],
 		"creatures": world_state.creature_count(),
 		"target": selected_target_id,
+		"dead": world_state.is_player_dead(),
 		"last_event": last_event_name,
 		"last_error": last_error_code,
 	}
@@ -328,6 +357,7 @@ func _on_pong(rtt_ms: int) -> void:
 func _on_snapshot(payload: Dictionary) -> void:
 	world_state.apply_snapshot(payload)
 	clear_target()
+	_sync_player_life_state()
 	var player := world_state.player
 	if player.has("inventory"):
 		client_state.set_inventory(player.get("inventory", []))
@@ -399,6 +429,10 @@ func _handle_combat_result(payload: Dictionary) -> void:
 	_apply_combat_progression(payload)
 	_apply_combat_loot(payload)
 
+	# Player death (creature attacks arrive as combat.result with the player as
+	# target) and any respawn signalled through a state change are reflected here.
+	_sync_player_life_state()
+
 
 ## Applies additive progression fields. The server writes level=0 when no reward
 ## is granted, so progression is applied only when level > 0.
@@ -461,6 +495,7 @@ func _handle_movement_accepted(payload: Dictionary) -> void:
 		int(payload.get("x", 0)),
 		int(payload.get("y", 0)),
 	])
+	_sync_player_life_state()
 
 
 func _on_protocol_error(name: String, code: String, _server_message: String) -> void:

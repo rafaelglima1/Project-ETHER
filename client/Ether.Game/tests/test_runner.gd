@@ -18,6 +18,7 @@ const SUITES := [
 	preload("res://tests/test_progression.gd"),
 	preload("res://tests/test_character_flow.gd"),
 	preload("res://tests/test_movement_input.gd"),
+	preload("res://tests/test_death_respawn.gd"),
 	preload("res://tests/test_mock_playable.gd"),
 ]
 

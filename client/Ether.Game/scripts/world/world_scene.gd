@@ -59,6 +59,10 @@ func _ready() -> void:
 
 	if game != null and game.has_signal("target_changed"):
 		game.target_changed.connect(_on_target_changed)
+	if game != null and game.has_signal("player_died"):
+		game.player_died.connect(_on_player_died)
+	if game != null and game.has_signal("player_respawned"):
+		game.player_respawned.connect(_on_player_respawned)
 
 	_sync_all()
 	_refresh_camera()
@@ -182,6 +186,18 @@ func _on_cancel_pressed() -> void:
 
 
 func _on_target_changed(_target_id: String) -> void:
+	queue_redraw()
+
+
+## While dead the stick must not keep emitting movement; the GameClient also
+## gates commands, this just stops the visual drift immediately.
+func _on_player_died() -> void:
+	if joystick != null:
+		joystick.reset()
+	queue_redraw()
+
+
+func _on_player_respawned() -> void:
 	queue_redraw()
 
 

@@ -37,6 +37,17 @@ func direction() -> Vector2:
 	return _direction
 
 
+## Centres the stick and stops emitting direction (used when input is disabled,
+## e.g. while the player is dead).
+func reset() -> void:
+	_active = false
+	_knob = Vector2.ZERO
+	if _direction != Vector2.ZERO:
+		_direction = Vector2.ZERO
+		direction_changed.emit(_direction)
+	queue_redraw()
+
+
 func _center() -> Vector2:
 	return size * 0.5
 
