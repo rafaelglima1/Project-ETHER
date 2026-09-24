@@ -29,14 +29,21 @@ gameToken
   │  ──▶ combat.attack       { abilityId, targetId, targetType }
   │  ◀── combat.result       { attackerId, targetId, damage, critical, targetHealth, targetMaxHealth, targetState, targetDefeated, attackerType, targetType }
   │  ◀── world.creature_moved { creatureId, mapId, x, y, health, maxHealth, state }
+  │
+  │  (death -> overlay, no commands)
+  │  ──▶ character.respawn   {}      ◀── world.snapshot (success)
+  │                              ◀── character.respawn.rejected { CHARACTER_NOT_DEAD }
+  │
+  │  snapshot.inventory[]  ◀──  GET /characters/{id}/inventory  (authoritative)
 ```
 
 The client never moves itself ahead of `movement.accepted`, never runs creature
-AI, and never computes damage/HP/death. Creature attacks arrive as ordinary
-`combat.result` messages with the creature as `attackerId`.
+AI, never computes damage/HP/death, and never restores HP/position on respawn.
+Creature attacks arrive as ordinary `combat.result` messages with the creature
+as `attackerId`; respawn and inventory always come from the server.
 
-See [`CONTRACTS.md`](CONTRACTS.md) for the full wire contract, including the M6
-creature replication the backend has not frozen yet.
+See [`CONTRACTS.md`](CONTRACTS.md) for the full wire contract (M4 envelope, M5
+combat, M6 creature replication, M7 progression/loot, respawn, M8 inventory).
 
 ---
 
@@ -119,30 +126,37 @@ respawn, so the loop above runs offline with no code changes above the transport
 godot --headless --path client/Ether.Game --script res://tests/test_runner.gd
 ```
 
-Covers: canonical envelope/hostile input/GUID requestId/sequence, state machine,
-heartbeat, reconnect, mock transport round trips, canonical snapshot + creature
-ingestion, movement acceptance/rejection, combat damage/death/cooldown/range
-rejections, creature AI chase+attack, respawn, and reconnect world restore.
+Covers (128 headless tests): canonical envelope/hostile input/GUID
+requestId/sequence, state machine, heartbeat, reconnect, mock transport round
+trips, canonical snapshot + creature ingestion, movement acceptance/rejection,
+combat damage/death/cooldown/range rejections, creature AI chase+attack,
+**death state + input gating + respawn (incl. reconnect-while-dead)**, **M8
+inventory (snapshot/HTTP/stacking/reconnect/UI)**, duplicate-frame idempotency,
+stale snapshot replacement, and Android resume→reconnect.
 
 ### Real end-to-end (against the deployed backend)
 
 ```bash
 ETHER_CLIENT_MODE=real ETHER_CLIENT_PROFILE=remote \
-ETHER_CLIENT_API_URL=https://<api-host> ETHER_CLIENT_WS_URL=wss://<game-host>/game \
-ETHER_E2E_EMAIL=hero@example.com ETHER_E2E_PASSWORD=... \
+ETHER_CLIENT_API_URL=https://game.rotagov.com.br \
+ETHER_CLIENT_WS_URL=wss://game.rotagov.com.br/game \
+ETHER_E2E_EMAIL=... ETHER_E2E_PASSWORD=... \
 godot --headless --path client/Ether.Game --script res://tests/real_e2e.gd
 ```
 
-Never starts a local backend; exits `2` (BLOCKED) if endpoints are not configured.
+11 stages; proves the loop end-to-end on Oracle and validates `character.respawn`
+(negative path) plus authoritative inventory over HTTP. Never starts a local
+backend; exits `2` (BLOCKED) if endpoints are not configured.
 
 ---
 
 ## Contract
 
-The client implements the backend contract exactly (ADR-0003 realtime envelope,
-ADR-0004 combat, ADR-0005 creatures + AI): `world.snapshot.creatures[]`,
-`world.creature_moved`, `combat.attack`/`combat.result` with `targetType`.
-Full details in [`CONTRACTS.md`](CONTRACTS.md). No backend contract request is
+The client implements the backend contract exactly: ADR-0003 realtime envelope,
+ADR-0004 combat, ADR-0005 creatures + AI, ADR-0006 progression/loot, plus the
+frozen **respawn** (`character.respawn`, backend `b68acc7`) and **M8 inventory**
+(`world.snapshot.inventory[]` + `GET /characters/{id}/inventory`, backend
+`d0aec66`). Full details in [`CONTRACTS.md`](CONTRACTS.md).
 pending. `BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched.
 
 ---
@@ -151,19 +165,22 @@ pending. `BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched
 
 Implemented: authentication, characters, game token, realtime transport, world
 enter, snapshot, server-authoritative movement, combat (`combat.attack` →
-`combat.result`), creatures + AI replication/rendering, heartbeat, reconnect,
-offline mock, and **provisional additive consumption of M7 progression + loot**
-(guarded: applied only when the server populates `level > 0` / a `loot` array).
+`combat.result`), creatures + AI replication/rendering, progression (XP/level)
+and loot, **death state + authoritative respawn**, **authoritative inventory
+(snapshot + HTTP + mobile modal)**, heartbeat, reconnect, Android
+pause/resume reconnection, offline mock.
 
-**Not implemented** (out of scope, next milestones): authoritative inventory
-(server-pushed inventory list), equipment, quests, NPCs, chat, party, guild,
+**Not implemented** (out of scope): equipment, quests, NPCs, chat, party, guild,
 PvP, market, crafting, monetization.
 
-### Night-run validation (client)
-- 89/89 headless tests (protocol, transport, robustness, state, combat, AI,
-  progression, reconnect).
-- Autoplay smoke: `creature_defeated=true player_hp=88 level=1 xp=12 loot=1`.
-- `tests/real_e2e.gd` drives the full loop (… movement → combat → defeat → XP →
-  loot) and is ready to run against the deployed endpoints.
-- Android: `BLOCKED_BY_LOCAL_ENVIRONMENT` (no SDK/export templates; JDK 8).
-- Oracle: `ORACLE_E2E_PENDING_ENDPOINT` (no public endpoint; loopback behind a proxy).
+### Validation (client)
+
+- **128/128** headless tests (protocol, transport, robustness, state, combat, AI,
+  progression, death/respawn, inventory, hardening).
+- Autoplay mock smoke: `kill → loot=1 → died → respawned → dead=false hp=100
+  pos=(0,0) creatures=3 inv=1`.
+- `tests/real_e2e.gd` against Oracle: **11/11 PASS** (login → character →
+  game-token → WSS → authenticate → snapshot → respawn verified → movement →
+  combat → defeat → XP/loot → authoritative inventory HTTP).
+- Oracle: `https://game.rotagov.com.br` / `wss://game.rotagov.com.br/game`.
+- Android APK: `com.rotagov.ether` debug export (see build section).

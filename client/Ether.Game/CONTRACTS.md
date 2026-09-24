@@ -138,3 +138,57 @@ feedback, merges `loot` into the inventory mirror (`ClientState.add_loot`,
 stacked by `itemDefinitionId`) and re-emits inventory changes. No XP curve, no
 loot roll and no ownership decision is made client-side.
 
+---
+
+## Respawn (frozen — backend `b68acc7`, order fix `0131215`)
+
+| Dir | Name | Payload |
+| --- | --- | --- |
+| C→S | `character.respawn` | `{}` |
+| S→C | `world.snapshot` (success) | canonical snapshot |
+| S→C | `character.respawn.rejected` | `{ code, message }` |
+
+Additional error code on `world.enter`:
+
+| Code | Meaning |
+| --- | --- |
+| `CHARACTER_DEAD` | character must respawn before entering the world |
+| `CHARACTER_NOT_DEAD` | respawn requested for a living character |
+
+Rules the client follows:
+
+- death arrives via `combat.result` (`targetState: "Dead"`, `targetDefeated: true`);
+- while dead the client emits **no** movement / attack commands, shows a death
+  overlay and gates the action buttons;
+- respawn is **only** requested (`character.respawn`); HP, position and state are
+  taken exclusively from the returned `world.snapshot`;
+- a duplicate `character.respawn` while one is in flight is suppressed
+  (cleared on snapshot, on reconnect and on rejection);
+- reconnecting with a dead character (`world.enter` → `CHARACTER_DEAD`)
+  automatically requests a respawn.
+
+---
+
+## M8 Inventory (frozen — backend `d0aec66`)
+
+`world.snapshot` carries the authoritative inventory (additive):
+
+```json
+"inventory": [
+  { "itemDefinitionId": "item.slime_gel", "name": "Slime Gel", "quantity": 3,
+    "maxStack": 99, "stackable": true, "location": "inventory" }
+]
+```
+
+| Dir | Name | Payload |
+| --- | --- | --- |
+| HTTP | `GET /characters/{characterId}/inventory` | `InventoryResponse { characterId, items[] }` |
+
+- The snapshot (or the HTTP read) **replaces** the client mirror — no merging,
+  so reconnects cannot duplicate stacks.
+- Loot from `combat.result` merges into the mirror by `itemDefinitionId` for
+  immediacy; the next snapshot/HTTP read is the authority.
+- Capacity (`Inventory:MaxSlots = 30`) is server config and is **not** in any
+  payload, so the client shows no capacity bar (not invented).
+- Unknown `itemDefinitionId` values are displayed but never interpreted.
+

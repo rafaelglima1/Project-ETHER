@@ -57,6 +57,29 @@ func _ready() -> void:
 	_build(config)
 
 
+## Android lifecycle: backgrounding drops the socket silently; on resume we
+## verify the connection and reconnect if it is gone. Heartbeat still catches a
+## socket that *looks* open but is dead.
+func _notification(what: int) -> void:
+	if network == null:
+		return
+	if what == MainLoop.NOTIFICATION_APPLICATION_RESUMED or what == MainLoop.NOTIFICATION_APPLICATION_FOCUS_IN:
+		_handle_app_resume()
+	elif what == MainLoop.NOTIFICATION_APPLICATION_PAUSED or what == MainLoop.NOTIFICATION_APPLICATION_FOCUS_OUT:
+		log_line("Application backgrounded/lost focus.")
+
+
+func _handle_app_resume() -> void:
+	if network.is_connected_to_server():
+		log_line("Resumed: connection alive.")
+		return
+	if network.state.current() == AppState.State.CONNECTING:
+		return
+	log_line("Resumed: connection lost, reconnecting.")
+	feedback.emit("Reconnecting...")
+	network.connect_to_server()
+
+
 func _build(p_config: ClientConfig) -> void:
 	config = p_config
 	_mode = config.mode_name()

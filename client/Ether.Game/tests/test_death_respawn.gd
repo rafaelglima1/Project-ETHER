@@ -306,7 +306,90 @@ func _has_error(name: String, code: String) -> bool:
 	return false
 
 
-# --- Command-level input gating (real GameClient autoload) ---------------------
+# --- Android lifecycle / stale-state hardening --------------------------------
+
+func test_app_resume_reconnects_when_disconnected() -> void:
+	var game: Node = TestCase.tree.root.get_node_or_null("/root/GameClient")
+	if game == null or not game.has_method("request_move"):
+		return
+
+	game.network.state.set_current(AppState.State.DISCONNECTED)
+	game._notification(MainLoop.NOTIFICATION_APPLICATION_RESUMED)
+	assert_eq(
+		game.network.state.current(),
+		AppState.State.CONNECTING,
+		"resume with a dead connection must trigger a reconnect")
+
+	# Tear the connection down again so the suite never inherits a live session.
+	game.network.disconnect_from_server()
+	game.network.state.set_current(AppState.State.DISCONNECTED)
+
+
+func test_duplicate_combat_result_is_idempotent() -> void:
+	var local := WorldState.new()
+	local.apply_snapshot(_creature_snapshot_base())
+	var payload := {
+		"attackerId": "c1", "targetId": "c1",
+		"targetHealth": 7, "targetMaxHealth": 30,
+		"targetState": "Chase", "targetDefeated": false,
+	}
+	local.apply_combat_result(payload)
+	var first_hp := int(local.get_entity("c1").get("hp", -1))
+
+	# Same authoritative frame delivered twice (reconnect/duplicate) — no drift.
+	local.apply_combat_result(payload)
+	assert_eq(int(local.get_entity("c1").get("hp", -1)), first_hp, "duplicate frame is idempotent")
+	assert_true(local.can_player_act(), "player unaffected")
+
+
+func test_fresh_snapshot_supersedes_stale_dead_state() -> void:
+	var local := WorldState.new()
+	local.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 5, "y": 5, "state": "Dead", "health": 0, "maxHealth": 100},
+	})
+	assert_true(local.is_player_dead(), "stale dead state mirrored")
+
+	# A later snapshot (e.g. after reconnect + respawn) must fully replace it.
+	local.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 0, "y": 0, "state": "InWorld", "health": 100, "maxHealth": 100},
+		"inventory": [],
+	})
+	assert_false(local.is_player_dead(), "snapshot replaces stale death")
+	assert_eq(int(local.player.get("hp", 0)), 100, "authoritative HP replaces stale 0")
+	assert_eq(local.player_position(), Vector2i(0, 0), "authoritative position replaces stale")
+	assert_true(local.can_player_act())
+
+
+func test_snapshot_clears_stale_selected_target() -> void:
+	var local := WorldState.new()
+	local.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 5, "y": 5, "state": "InWorld"},
+		"creatures": [{"creatureId": "c1", "name": "Slime", "x": 6, "y": 5, "health": 30, "maxHealth": 30, "state": "Idle"}],
+	})
+	assert_eq(local.creature_count(), 1, "targetable creature present")
+
+	# Respawn/reconnect delivers a fresh snapshot: creatures are rebuilt from it
+	# and any previously targeted id must not survive silently.
+	local.apply_snapshot({
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 0, "y": 0, "state": "InWorld", "health": 100, "maxHealth": 100},
+	})
+	assert_false(local.has_entity("c1"), "stale creature state replaced by snapshot")
+	assert_eq(local.creature_count(), 0, "no stale creatures retained")
+	assert_eq(local.get_entity("c1"), {}, "stale target id resolves to nothing")
+
+
+func _creature_snapshot_base() -> Dictionary:
+	return {
+		"mapId": 1, "width": 32, "height": 32,
+		"player": {"characterId": "me", "x": 1, "y": 1, "state": "InWorld", "health": 100, "maxHealth": 100},
+		"creatures": [
+			{"creatureId": "c1", "name": "Slime", "x": 2, "y": 1, "health": 30, "maxHealth": 30, "state": "Idle"},
+		],
+	}
 
 ## Drives the real GameClient autoload and proves that no movement / attack /
 ## respawn command is emitted while dead (the sequence counter only advances
