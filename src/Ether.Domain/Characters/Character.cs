@@ -113,6 +113,32 @@ public sealed class Character
             nowUtc);
     }
 
+    /// <summary>
+    /// Returns a dead character to the world at a server-chosen spawn point with
+    /// full health. Only a dead/respawning character may respawn.
+    /// </summary>
+    public void Respawn(WorldPosition spawn, DateTimeOffset nowUtc)
+    {
+        if (State is not (CharacterState.Dead or CharacterState.Respawning))
+        {
+            throw new InvalidStateException($"Character cannot respawn from state {State}.");
+        }
+
+        if (spawn.MapId.IsEmpty)
+        {
+            throw new DomainException("Respawn requires a valid spawn map.");
+        }
+
+        ChangeState(CharacterState.Respawning, nowUtc);
+
+        Health = MaxHealth;
+        MapId = spawn.MapId;
+        PositionX = spawn.X;
+        PositionY = spawn.Y;
+
+        ChangeState(CharacterState.InWorld, nowUtc);
+    }
+
     /// <summary>True while the character has health remaining.</summary>
     public bool IsAlive => Health > 0;
 

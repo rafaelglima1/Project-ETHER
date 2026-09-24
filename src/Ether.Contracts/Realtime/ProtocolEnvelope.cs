@@ -45,6 +45,7 @@ public static class ProtocolMessageNames
     public const string WorldEnter = "world.enter";
     public const string MovementMove = "movement.move";
     public const string CombatAttack = "combat.attack";
+    public const string CharacterRespawn = "character.respawn";
     public const string SystemPing = "system.ping";
 
     // server -> client
@@ -61,6 +62,7 @@ public static class ProtocolMessageNames
     public const string WorldEnterRejected = "world.enter.rejected";
     public const string MovementRejected = "movement.rejected";
     public const string CombatRejected = "combat.rejected";
+    public const string CharacterRespawnRejected = "character.respawn.rejected";
 }
 
 /// <summary>Deterministic error codes returned to clients (never stack traces).</summary>
@@ -96,4 +98,8 @@ public static class ProtocolErrorCodes
     public const string OutOfRange = "OUT_OF_RANGE";
     public const string CooldownActive = "COOLDOWN_ACTIVE";
     public const string SelfTarget = "SELF_TARGET";
+
+    // death / respawn
+    public const string CharacterDead = "CHARACTER_DEAD";
+    public const string CharacterNotDead = "CHARACTER_NOT_DEAD";
 }

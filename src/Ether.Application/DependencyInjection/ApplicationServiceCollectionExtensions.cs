@@ -32,6 +32,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<GetAccountCharactersHandler>();
         services.AddScoped<EnterWorldHandler>();
         services.AddScoped<MoveCharacterHandler>();
+        services.AddScoped<RespawnCharacterHandler>();
         services.AddScoped<IssueGameTokenHandler>();
 
         // Combat (M5).

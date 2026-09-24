@@ -22,12 +22,14 @@ public static class GameServerServiceCollectionExtensions
         services.AddSingleton<ProtocolSerializer>();
         services.AddSingleton<ProtocolDispatcher>();
         services.AddSingleton<GameSessionManager>();
+        services.AddSingleton<WorldSnapshotFactory>();
 
         // Command handlers (resolved from a scope per command).
         services.AddScoped<IProtocolCommandHandler, AuthenticateCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, EnterWorldCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, MovementCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, CombatAttackCommandHandler>();
+        services.AddScoped<IProtocolCommandHandler, RespawnCommandHandler>();
         services.AddScoped<IProtocolCommandHandler, PingCommandHandler>();
 
         // Lifecycle.

@@ -1,3 +1,4 @@
+using Ether.Application.Abstractions;
 using Ether.Application.Characters;
 using Ether.Application.Exceptions;
 using Ether.Contracts.Characters;
@@ -10,24 +11,27 @@ using Ether.GameServer.Sessions;
 
 namespace Ether.GameServer.Handlers;
 
-/// <summary>Puts the session's character into the world and returns a snapshot.</summary>
-public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
+/// <summary>
+/// Respawns the session's dead character and returns a fresh world snapshot.
+/// The server decides death, spawn point and restored health.
+/// </summary>
+public sealed class RespawnCommandHandler : IProtocolCommandHandler
 {
-    private readonly EnterWorldHandler _enterWorld;
+    private readonly RespawnCharacterHandler _respawn;
     private readonly WorldSnapshotFactory _snapshots;
     private readonly TimeProvider _timeProvider;
 
-    public EnterWorldCommandHandler(
-        EnterWorldHandler enterWorld,
+    public RespawnCommandHandler(
+        RespawnCharacterHandler respawn,
         WorldSnapshotFactory snapshots,
         TimeProvider timeProvider)
     {
-        _enterWorld = enterWorld;
+        _respawn = respawn;
         _snapshots = snapshots;
         _timeProvider = timeProvider;
     }
 
-    public string Name => ProtocolMessageNames.WorldEnter;
+    public string Name => ProtocolMessageNames.CharacterRespawn;
 
     public async Task HandleAsync(
         GameSession session,
@@ -42,43 +46,31 @@ public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
             return;
         }
 
-        if (session.State == GameSessionState.InWorld)
-        {
-            await Reject(responder, envelope, ProtocolErrorCodes.AlreadyInWorld, "Character is already in the world.", cancellationToken)
-                .ConfigureAwait(false);
-            return;
-        }
-
         CharacterResponse character;
         try
         {
-            character = await _enterWorld
+            character = await _respawn
                 .HandleAsync(session.AccountId.Value, session.CharacterId.Value, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (CharacterDeadException)
+        catch (CharacterNotDeadException)
         {
-            await Reject(responder, envelope, ProtocolErrorCodes.CharacterDead, "Character is dead; respawn first.", cancellationToken)
-                .ConfigureAwait(false);
+            await Reject(responder, envelope, ProtocolErrorCodes.CharacterNotDead, "Character is not dead.", cancellationToken).ConfigureAwait(false);
             return;
         }
         catch (CharacterNotFoundException)
         {
-            await Reject(responder, envelope, ProtocolErrorCodes.InvalidState, "Character was not found.", cancellationToken)
-                .ConfigureAwait(false);
+            await Reject(responder, envelope, ProtocolErrorCodes.InvalidState, "Character was not found.", cancellationToken).ConfigureAwait(false);
             return;
         }
         catch (ForbiddenException)
         {
-            await Reject(responder, envelope, ProtocolErrorCodes.NotAuthorized, "Character does not belong to this session.", cancellationToken)
-                .ConfigureAwait(false);
+            await Reject(responder, envelope, ProtocolErrorCodes.NotAuthorized, "Character does not belong to this session.", cancellationToken).ConfigureAwait(false);
             return;
         }
         catch (DomainException)
         {
-            // Expected gameplay states must never surface as INTERNAL_ERROR.
-            await Reject(responder, envelope, ProtocolErrorCodes.InvalidState, "Character cannot enter the world.", cancellationToken)
-                .ConfigureAwait(false);
+            await Reject(responder, envelope, ProtocolErrorCodes.InvalidState, "Respawn rejected.", cancellationToken).ConfigureAwait(false);
             return;
         }
 
@@ -98,7 +90,7 @@ public sealed class EnterWorldCommandHandler : IProtocolCommandHandler
         string message,
         CancellationToken cancellationToken) =>
         responder.SendErrorAsync(
-            ProtocolMessageNames.WorldEnterRejected,
+            ProtocolMessageNames.CharacterRespawnRejected,
             code,
             message,
             envelope.RequestId,
