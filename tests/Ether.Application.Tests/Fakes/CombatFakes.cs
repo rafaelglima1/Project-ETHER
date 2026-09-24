@@ -55,11 +55,17 @@ internal sealed class FakeCooldownStore : IAbilityCooldownStore
 /// <summary>No-op lock provider for single-threaded handler tests.</summary>
 internal sealed class NoopEntityLockProvider : IEntityLockProvider
 {
-    public Task<IAsyncDisposable> AcquireAsync(IReadOnlyCollection<Guid> entityIds, CancellationToken cancellationToken) =>
-        Task.FromResult<IAsyncDisposable>(new Noop());
+    public Task<IEntityLockLease> AcquireAsync(IReadOnlyCollection<Guid> entityIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IEntityLockLease>(new Noop(entityIds));
 
-    private sealed class Noop : IAsyncDisposable
+    private sealed class Noop : IEntityLockLease
     {
+        private readonly HashSet<Guid> _entityIds;
+
+        public Noop(IEnumerable<Guid> entityIds) => _entityIds = entityIds.ToHashSet();
+
+        public bool Covers(Guid entityId) => _entityIds.Contains(entityId);
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

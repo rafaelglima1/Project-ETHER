@@ -17,8 +17,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace Ether.GameServer.Tests;
 
 /// <summary>
-/// Reproduces: inventory is added to DB via loot, but the WebSocket snapshot after
-/// reconnect shows an empty inventory.
+/// Reproduces reconnect after combat, where the old flow rejected world.enter and
+/// its error payload was misread as an empty inventory snapshot.
 /// </summary>
 public sealed class InventorySnapshotReconnectTests
 {
@@ -82,7 +82,7 @@ public sealed class InventorySnapshotReconnectTests
     }
 
     [Fact]
-    public async Task Inventory_in_snapshot_survives_reconnect()
+    public async Task Inventory_in_snapshot_survives_reconnect_from_combat_state()
     {
         using var factory = CreateFactory();
         using var ct = new CancellationTokenSource(Timeout);
@@ -92,7 +92,7 @@ public sealed class InventorySnapshotReconnectTests
         var tokenService = factory.Services.GetRequiredService<ITokenService>();
         var gameToken = tokenService.CreateGameToken(account, character.Value).Token;
 
-        // Seed a creature adjacent to the player and kill it to generate loot.
+        // Keep a creature in the world so the snapshot is representative.
         var creatureWorld = factory.Services.GetRequiredService<ICreatureWorld>();
         var slime = CreatureCatalog.Get(new CreatureDefinitionId("creature.slime"));
         var creature = new CreatureInstance(
@@ -113,7 +113,15 @@ public sealed class InventorySnapshotReconnectTests
             Assert.Equal(ProtocolMessageNames.WorldSnapshot, snap1.Name);
         }
 
-        // Simulate loot being added to inventory directly (as combat would do).
+        // Combat is persisted but the socket closed without a clean world leave.
+        // This is the Oracle failure path: reconnect used to reject world.enter
+        // from Combat, so callers misread the error payload as an empty snapshot.
+        var storedCharacter = await persistence.GetByIdAsync(character, ct.Token);
+        Assert.NotNull(storedCharacter);
+        storedCharacter!.EnterCombat(DateTimeOffset.UtcNow);
+        Assert.Equal(CharacterState.Combat, storedCharacter.State);
+
+        // Simulate a persisted loot reward so the reconnect snapshot must contain it.
         var itemDefinition = Ether.Domain.Items.ItemCatalog.Get(Ether.Domain.Items.ItemCatalog.SlimeGel);
         var item = Ether.Domain.Items.ItemInstance.CreateLoot(itemDefinition, 2, new CharacterId(character.Value));
         await persistence.AddAsync(item, ct.Token);

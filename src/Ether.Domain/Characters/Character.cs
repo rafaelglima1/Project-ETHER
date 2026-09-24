@@ -300,8 +300,14 @@ public sealed class Character
     /// </summary>
     public void EnterWorld(DateTimeOffset nowUtc)
     {
-        if (State == CharacterState.InWorld)
+        // Reconnect: the previous session may have ended without a clean leave, so
+        // the character can still be flagged in-world (or in a transient in-world
+        // sub-state such as Combat/DisconnectGrace). Entering again reasserts the
+        // canonical in-world state; combat is scoped to a session and does not
+        // survive a reconnect.
+        if (State is CharacterState.InWorld or CharacterState.Combat or CharacterState.DisconnectGrace)
         {
+            ChangeState(CharacterState.InWorld, nowUtc);
             return;
         }
 

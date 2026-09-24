@@ -15,7 +15,8 @@ internal sealed class FakeInventoryService : IInventoryService
         CharacterId owner,
         ItemDefinition definition,
         int quantity,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IEntityLockLease? heldLocks = null)
     {
         var instance = ItemInstance.CreateLoot(definition, quantity, owner);
         _items.Add(instance);

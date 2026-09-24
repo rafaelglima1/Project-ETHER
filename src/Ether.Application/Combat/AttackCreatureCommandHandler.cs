@@ -139,7 +139,7 @@ public sealed class AttackCreatureCommandHandler
         KillRewardResult? reward = null;
         if (defeated)
         {
-            reward = await _rewards.GrantAsync(attacker, definition, cancellationToken).ConfigureAwait(false);
+            reward = await _rewards.GrantAsync(attacker, definition, cancellationToken, handle).ConfigureAwait(false);
         }
 
         await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

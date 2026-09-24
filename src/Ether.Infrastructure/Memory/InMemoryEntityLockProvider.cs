@@ -12,7 +12,7 @@ public sealed class InMemoryEntityLockProvider : IEntityLockProvider
 {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _gates = new();
 
-    public async Task<IAsyncDisposable> AcquireAsync(
+    public async Task<IEntityLockLease> AcquireAsync(
         IReadOnlyCollection<Guid> entityIds,
         CancellationToken cancellationToken)
     {
@@ -30,7 +30,7 @@ public sealed class InMemoryEntityLockProvider : IEntityLockProvider
                 acquired.Add(gate);
             }
 
-            return new Releaser(acquired);
+            return new Releaser(acquired, ordered);
         }
         catch
         {
@@ -47,15 +47,19 @@ public sealed class InMemoryEntityLockProvider : IEntityLockProvider
         }
     }
 
-    private sealed class Releaser : IAsyncDisposable
+    private sealed class Releaser : IEntityLockLease
     {
         private readonly List<SemaphoreSlim> _gates;
+        private readonly HashSet<Guid> _entityIds;
         private bool _released;
 
-        public Releaser(List<SemaphoreSlim> gates)
+        public Releaser(List<SemaphoreSlim> gates, IEnumerable<Guid> entityIds)
         {
             _gates = gates;
+            _entityIds = entityIds.ToHashSet();
         }
+
+        public bool Covers(Guid entityId) => !_released && _entityIds.Contains(entityId);
 
         public ValueTask DisposeAsync()
         {

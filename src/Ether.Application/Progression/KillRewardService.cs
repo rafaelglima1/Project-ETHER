@@ -29,7 +29,8 @@ public sealed class KillRewardService
     public async Task<KillRewardResult> GrantAsync(
         Character killer,
         CreatureDefinition definition,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IEntityLockLease? heldLocks = null)
     {
         ArgumentNullException.ThrowIfNull(killer);
         ArgumentNullException.ThrowIfNull(definition);
@@ -44,7 +45,7 @@ public sealed class KillRewardService
             foreach (var drop in LootRoller.Roll(table, _random))
             {
                 var itemDefinition = Domain.Items.ItemCatalog.Get(drop.ItemDefinitionId);
-                var instances = await _inventory.AddLootAsync(killer.Id, itemDefinition, drop.Quantity, cancellationToken)
+                var instances = await _inventory.AddLootAsync(killer.Id, itemDefinition, drop.Quantity, cancellationToken, heldLocks)
                     .ConfigureAwait(false);
                 dropped.AddRange(instances);
             }

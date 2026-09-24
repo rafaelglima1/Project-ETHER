@@ -18,12 +18,14 @@ public sealed class InventoryService : IInventoryService
 {
     private readonly IItemInstanceRepository _items;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEntityLockProvider _locks;
     private readonly InventoryOptions _options;
     private readonly TimeProvider _timeProvider;
 
     public InventoryService(
         IItemInstanceRepository items,
         IUnitOfWork unitOfWork,
+        IEntityLockProvider locks,
         IOptions<InventoryOptions> options,
         TimeProvider timeProvider)
     {
@@ -31,6 +33,7 @@ public sealed class InventoryService : IInventoryService
 
         _items = items;
         _unitOfWork = unitOfWork;
+        _locks = locks;
         _options = options.Value;
         _timeProvider = timeProvider;
     }
@@ -39,7 +42,8 @@ public sealed class InventoryService : IInventoryService
         CharacterId owner,
         ItemDefinition definition,
         int quantity,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IEntityLockLease? heldLocks = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
@@ -48,20 +52,52 @@ public sealed class InventoryService : IInventoryService
             throw new DomainException("Loot quantity must be positive.");
         }
 
+        if (heldLocks?.Covers(owner.Value) != true)
+        {
+            await using var ownerLock = await _locks
+                .AcquireAsync([owner.Value], cancellationToken)
+                .ConfigureAwait(false);
+
+            return await AddLootUnderLockAsync(owner, definition, quantity, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await AddLootUnderLockAsync(owner, definition, quantity, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<IReadOnlyList<ItemInstance>> AddLootUnderLockAsync(
+        CharacterId owner,
+        ItemDefinition definition,
+        int quantity,
+        CancellationToken cancellationToken)
+    {
         var now = _timeProvider.GetUtcNow();
         var existing = await _items.GetByOwnerAsync(owner, cancellationToken).ConfigureAwait(false);
+        var inventoryStacks = existing.Where(item => item.Location == ItemLocation.Inventory).ToList();
         var results = new List<ItemInstance>();
+        var mergeCapacity = definition.Stackable
+            ? inventoryStacks
+                .Where(item => item.DefinitionId == definition.Id)
+                .Sum(item => (long)Math.Max(0, definition.MaxStack - item.Quantity))
+            : 0;
+        var remainingAfterMerge = Math.Max(0L, quantity - mergeCapacity);
+        var newStackCount = remainingAfterMerge / definition.MaxStack +
+                            (remainingAfterMerge % definition.MaxStack == 0 ? 0 : 1);
 
-        // Merge into an existing compatible stack first.
+        if (inventoryStacks.Count + newStackCount > _options.MaxSlots)
+        {
+            throw new InventoryFullException(_options.MaxSlots);
+        }
+
+        // Merge into compatible stacks first; any remaining quantity occupies new slots.
         if (definition.Stackable)
         {
-            var stack = existing.FirstOrDefault(item =>
-                item.DefinitionId == definition.Id &&
-                item.Location == ItemLocation.Inventory &&
-                item.Quantity < definition.MaxStack);
-
-            if (stack is not null)
+            foreach (var stack in inventoryStacks.Where(item => item.DefinitionId == definition.Id && item.Quantity < definition.MaxStack))
             {
+                if (quantity == 0)
+                {
+                    break;
+                }
+
                 var room = definition.MaxStack - stack.Quantity;
                 var toAdd = Math.Min(room, quantity);
                 stack.AddQuantity(toAdd, now);
@@ -73,13 +109,6 @@ public sealed class InventoryService : IInventoryService
         // Create new stacks for the remainder.
         while (quantity > 0)
         {
-            var stackCount = existing.Count + results.Count(r => r.DefinitionId == definition.Id && r.Location == ItemLocation.Inventory);
-            if (stackCount >= _options.MaxSlots)
-            {
-                await _unitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-                throw new InventoryFullException(_options.MaxSlots);
-            }
-
             var toCreate = Math.Min(quantity, definition.MaxStack);
             var instance = ItemInstance.CreateLoot(definition, toCreate, owner);
             await _items.AddAsync(instance, cancellationToken).ConfigureAwait(false);

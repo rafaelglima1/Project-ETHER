@@ -61,8 +61,25 @@ Persistence is a single `item_instances` table (id, definition_id, quantity,
 owner_character_id, location_type) with `quantity > 0` and a `Restrict` FK to
 `characters`. Definitions stay content-driven (no `item_definitions` table yet).
 
-Deferred: inventory slots/capacity, stacking into existing stacks, equipment,
-trade/market escrow, gold/currency.
+At M7, inventory slots/capacity, stacking into existing stacks, equipment,
+trade/market escrow and gold/currency were deferred. The M8 addendum below closes
+capacity and stacking; equipment, trade/market escrow and gold/currency remain deferred.
+
+## M8 addendum — inventory locking and persistence ownership
+
+`InventoryService.AddLootAsync` owns the inventory read-modify-write boundary. A
+direct caller that does not already hold the owner's entity lock is serialized by
+the service using `IEntityLockProvider`, through the shared unit-of-work save. A
+larger operation such as creature combat owns its multi-entity lease and passes that
+lease through `KillRewardService` to the inventory service; the inventory service
+verifies that the lease covers the owner and does not reacquire the same semaphore.
+This makes the nested lock ownership explicit and prevents the former self-deadlock.
+
+Capacity is checked before mutating stacks, so an inventory-full result cannot
+persist a partial add. Locking covers the owner query, stack merges/new rows, and
+`SaveChangesAsync`. The current lock provider is process-local; PostgreSQL remains
+the source of truth, and multi-GameServer deployment requires cross-process database
+serialization/versioning before it is enabled.
 
 ## Decision — protocol (additive)
 
@@ -84,5 +101,5 @@ entries carry `itemDefinitionId`, `name`, `quantity`, `itemInstanceId`.
 ## Deferred
 
 - Gold/currency rewards and economy sinks/sources.
-- Inventory capacity, stacking, equipment and item use.
+- Equipment and item use.
 - Death/respawn penalties (Blueprint `PRODUCT_DECISION_REQUIRED`).
