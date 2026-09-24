@@ -13,6 +13,11 @@ technical contract for the project and must be preserved.
 
 ## Precedence
 
+The order below resolves conflicts **between blueprint versions only**. The
+repository-wide source hierarchy is defined by the canonical
+[Engineering Constitution](../engineering/ETHER-ENGINEERING-CONSTITUTION.md) and
+[Autonomous Engineering Protocol](../engineering/ETHER-AUTONOMOUS-ENGINEERING-PROTOCOL-V2.md).
+
 When blueprints conflict, the most recent version wins:
 
 ```

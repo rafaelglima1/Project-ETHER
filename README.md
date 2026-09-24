@@ -9,6 +9,9 @@ auto-play and without pay-to-win.
 
 The product intent is captured in the blueprints under [`docs/blueprints`](docs/blueprints/README.md).
 The current technical contract is **Blueprint v5.0**.
+Permanent engineering rules and autonomous-agent workflow are defined in the
+[Engineering Constitution](docs/engineering/ETHER-ENGINEERING-CONSTITUTION.md) and
+[Autonomous Engineering Protocol](docs/engineering/ETHER-AUTONOMOUS-ENGINEERING-PROTOCOL-V2.md).
 
 ## Status
 
