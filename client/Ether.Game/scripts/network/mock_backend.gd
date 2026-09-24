@@ -53,6 +53,8 @@ var account_email := "hero@example.com"
 var session_id := ""
 var selected_character_id := ""
 var characters: Array = []
+## Authoritative (server-role) inventory mirror for the mock.
+var inventory: Array = []
 var ai_enabled := true
 var criticals_enabled := true
 var loot_guaranteed := false
@@ -345,6 +347,8 @@ func _handle_attack(payload: Dictionary, request_id: String, sequence: int) -> A
 	}
 	if not loot.is_empty():
 		result_payload["loot"] = loot
+		for entry in loot:
+			_inventory_add(entry)
 
 	var out: Array = [_event(ProtocolMessages.EVT_COMBAT_RESULT, result_payload, request_id, sequence)]
 	return out
@@ -567,7 +571,34 @@ func _snapshot_payload() -> Dictionary:
 			"maxHealth": PLAYER_MAX_HEALTH,
 		},
 		"creatures": creatures,
+		"inventory": inventory.duplicate(true),
 		"serverTime": _now(),
+	}
+
+
+## Server-role inventory: stacks by item definition (InventoryService parity).
+func _inventory_add(entry: Dictionary) -> void:
+	var definition_id := String(entry.get("itemDefinitionId", entry.get("name", "item")))
+	var quantity := int(entry.get("quantity", 1))
+	for item in inventory:
+		if String(item.get("itemDefinitionId", "")) == definition_id:
+			item["quantity"] = int(item.get("quantity", 0)) + quantity
+			return
+	inventory.append({
+		"itemDefinitionId": definition_id,
+		"name": String(entry.get("name", "Item")),
+		"quantity": quantity,
+		"maxStack": 99,
+		"stackable": true,
+		"location": "inventory",
+	})
+
+
+## GET /characters/{id}/inventory equivalent (InventoryResponse shape).
+func api_get_inventory() -> Dictionary:
+	return {
+		"characterId": selected_character_id,
+		"items": inventory.duplicate(true),
 	}
 
 

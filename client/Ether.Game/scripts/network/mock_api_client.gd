@@ -60,3 +60,10 @@ func request_game_token(character_id: String, p_request_id: String = "") -> Stri
 	backend.issue_game_token(character_id)
 	_complete(request_id, true, {"gameToken": "mock-game-token"}, "")
 	return request_id
+
+
+func get_inventory(character_id: String, p_request_id: String = "") -> String:
+	var request_id := resolve_request_id(p_request_id)
+	backend.selected_character_id = character_id
+	_complete(request_id, true, backend.api_get_inventory(), "")
+	return request_id

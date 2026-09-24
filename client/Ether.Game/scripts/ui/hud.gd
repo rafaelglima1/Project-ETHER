@@ -20,6 +20,10 @@ var _feedback_label: Label
 var _attack_button: Button
 var _power_button: Button
 var _inventory_list: VBoxContainer
+var _inventory_button: Button
+var _inventory_count: Label
+var _inventory_backdrop: ColorRect
+var _inventory_modal: Control
 var _death_overlay: ColorRect
 var _death_panel: Control
 var _death_message: Label
@@ -91,24 +95,30 @@ func _build() -> void:
 	_ping_label = Label.new()
 	stats.add_child(_ping_label)
 
-	var inventory_panel := PanelContainer.new()
-	inventory_panel.anchor_left = 1.0
-	inventory_panel.anchor_right = 1.0
-	inventory_panel.offset_left = -232.0
-	inventory_panel.offset_right = -12.0
-	inventory_panel.offset_top = 12.0
-	root.add_child(inventory_panel)
+	# Inventory toggle (top-right). The modal itself is added later so it draws
+	# above the world but below the death overlay.
+	_inventory_button = Button.new()
+	_inventory_button.text = "Inventory"
+	_inventory_button.anchor_left = 1.0
+	_inventory_button.anchor_right = 1.0
+	_inventory_button.offset_left = -212.0
+	_inventory_button.offset_right = -12.0
+	_inventory_button.offset_top = 12.0
+	_inventory_button.offset_bottom = 76.0
+	_inventory_button.pressed.connect(_on_inventory_pressed)
+	root.add_child(_inventory_button)
 
-	var inventory_column := VBoxContainer.new()
-	inventory_column.custom_minimum_size = Vector2(200, 0)
-	inventory_panel.add_child(inventory_column)
-
-	var inventory_title := Label.new()
-	inventory_title.text = "Inventory"
-	inventory_column.add_child(inventory_title)
-
-	_inventory_list = VBoxContainer.new()
-	inventory_column.add_child(_inventory_list)
+	_inventory_count = Label.new()
+	_inventory_count.anchor_left = 1.0
+	_inventory_count.anchor_right = 1.0
+	_inventory_count.offset_left = -212.0
+	_inventory_count.offset_right = -12.0
+	_inventory_count.offset_top = 80.0
+	_inventory_count.offset_bottom = 108.0
+	_inventory_count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_inventory_count.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_inventory_count.text = "0"
+	root.add_child(_inventory_count)
 
 	# Action bar (bottom-right, touch friendly).
 	var actions := HBoxContainer.new()
@@ -158,6 +168,47 @@ func _build() -> void:
 	move_hint.add_theme_font_size_override("font_size", 14)
 	move_hint.modulate = Color(0.75, 0.82, 0.92)
 	root.add_child(move_hint)
+
+	# Inventory modal: backdrop blocks stray world taps; modal carries the list.
+	# Added before the death overlay so death always stays on top.
+	_inventory_backdrop = ColorRect.new()
+	_inventory_backdrop.color = Color(0.0, 0.0, 0.0, 0.45)
+	_inventory_backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_inventory_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_inventory_backdrop.visible = false
+	_inventory_backdrop.gui_input.connect(func(event):
+		if event is InputEventMouseButton and event.pressed:
+			_close_inventory())
+	add_child(_inventory_backdrop)
+
+	_inventory_modal = CenterContainer.new()
+	_inventory_modal.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_inventory_modal.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_inventory_modal.visible = false
+	add_child(_inventory_modal)
+
+	var modal_panel := PanelContainer.new()
+	_inventory_modal.add_child(modal_panel)
+
+	var modal_column := VBoxContainer.new()
+	modal_column.custom_minimum_size = Vector2(340, 0)
+	modal_column.add_theme_constant_override("separation", 10)
+	modal_panel.add_child(modal_column)
+
+	var modal_title := Label.new()
+	modal_title.text = "Inventory"
+	modal_title.add_theme_font_size_override("font_size", 22)
+	modal_column.add_child(modal_title)
+
+	_inventory_list = VBoxContainer.new()
+	_inventory_list.add_theme_constant_override("separation", 6)
+	modal_column.add_child(_inventory_list)
+
+	var close_button := Button.new()
+	close_button.text = "Close"
+	close_button.custom_minimum_size = Vector2(0, 64)
+	close_button.pressed.connect(_close_inventory)
+	modal_column.add_child(close_button)
 
 	# Minimal death state: the overlay blocks stray taps but stays translucent so
 	# the world remains visible; the panel carries the message + Respawn action.
@@ -288,6 +339,33 @@ func _on_target_changed(target_id: String) -> void:
 
 
 func _on_inventory(items: Array) -> void:
+	_render_inventory(items)
+	# Mirror the authoritative stack count next to the button.
+	if _inventory_count != null:
+		_inventory_count.text = str(items.size())
+	if _inventory_modal != null and _inventory_modal.visible and game != null and game.has_method("log_line"):
+		game.log_line("Inventory refresh: %d stack(s)." % items.size())
+
+
+func _on_inventory_pressed() -> void:
+	if _inventory_modal != null:
+		_inventory_modal.visible = true
+	if _inventory_backdrop != null:
+		_inventory_backdrop.visible = true
+	# Refresh from the authoritative endpoint when opening.
+	if game != null and game.has_method("request_inventory"):
+		game.request_inventory()
+	_render_inventory(game.client_state.inventory if game != null else [])
+
+
+func _close_inventory() -> void:
+	if _inventory_modal != null:
+		_inventory_modal.visible = false
+	if _inventory_backdrop != null:
+		_inventory_backdrop.visible = false
+
+
+func _render_inventory(items: Array) -> void:
 	if _inventory_list == null:
 		return
 	for child in _inventory_list.get_children():
@@ -298,9 +376,10 @@ func _on_inventory(items: Array) -> void:
 		_inventory_list.add_child(empty)
 		return
 	for item in items:
-		var label := Label.new()
-		label.text = "%s x%d" % [String(item.get("name", "Item")), int(item.get("quantity", 1))]
-		_inventory_list.add_child(label)
+		var row := Label.new()
+		row.text = "%s  x%d" % [String(item.get("name", "Item")), int(item.get("quantity", 1))]
+		row.add_theme_font_size_override("font_size", 17)
+		_inventory_list.add_child(row)
 
 
 func _on_player_died() -> void:

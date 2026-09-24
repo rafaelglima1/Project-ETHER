@@ -49,6 +49,12 @@ func request_game_token(_character_id: String, _request_id: String = "") -> Stri
 	return ""
 
 
+## Authoritative inventory read (M8): GET /characters/{id}/inventory.
+func get_inventory(_character_id: String, _request_id: String = "") -> String:
+	push_error("ApiClient.get_inventory() must be overridden")
+	return ""
+
+
 func set_token(_token: String) -> void:
 	pass
 

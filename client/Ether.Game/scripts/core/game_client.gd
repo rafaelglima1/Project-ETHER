@@ -151,6 +151,15 @@ func request_enter_world() -> void:
 	_ensure_authenticated()
 
 
+## Authoritative inventory read (M8): GET /characters/{id}/inventory.
+func request_inventory() -> void:
+	if client_state.selected_character_id == "":
+		return
+	var request_id := api.new_request_id()
+	_pending[request_id] = "inventory"
+	api.get_inventory(client_state.selected_character_id, request_id)
+
+
 func request_move(x: int, y: int) -> void:
 	if network.state.current() != AppState.State.IN_WORLD:
 		return
@@ -319,6 +328,13 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		client_state.game_token_expires_at = String(_as_dictionary(data).get("expiresAt", ""))
 		log_line("Game token acquired.")
 		_ensure_authenticated()
+	elif intent == "inventory":
+		# InventoryResponse { characterId, items[] } — server is authoritative.
+		var response := _as_dictionary(data)
+		var items: Array = _as_array(response.get("items", []))
+		client_state.set_inventory(items)
+		inventory_changed.emit(client_state.inventory)
+		log_line("Inventory loaded (%d stack(s))." % items.size())
 
 
 func _ensure_authenticated() -> void:
@@ -371,8 +387,17 @@ func _on_snapshot(payload: Dictionary) -> void:
 	clear_target()
 	_sync_player_life_state()
 	var player := world_state.player
-	if player.has("inventory"):
-		client_state.set_inventory(player.get("inventory", []))
+
+	# Authoritative inventory (M8): top-level `inventory[]`, with the legacy
+	# `player.inventory` as a fallback. Always replaces the mirror.
+	var items: Variant = null
+	if payload.has("inventory"):
+		items = payload.get("inventory")
+	elif player.has("inventory"):
+		items = player.get("inventory")
+	if typeof(items) == TYPE_ARRAY:
+		var list: Array = items
+		client_state.set_inventory(list)
 		inventory_changed.emit(client_state.inventory)
 	_entered_world = true
 	network.mark_in_world()
@@ -537,6 +562,10 @@ func _on_protocol_error(name: String, code: String, _server_message: String) -> 
 # --- Autoplay (dev/smoke only, gated by ETHER_AUTOPLAY) -----------------------
 
 func _autoplay_login() -> void:
+	if _backend != null:
+		# Deterministic smoke: guarantee a loot drop so loot -> inventory is
+		# always exercised.
+		_backend.set_loot_guaranteed(true)
 	var email := OS.get_environment("ETHER_E2E_EMAIL")
 	var password := OS.get_environment("ETHER_E2E_PASSWORD")
 	if email == "":
@@ -598,11 +627,12 @@ func _autoplay_smoke() -> void:
 		if not world_state.is_player_dead():
 			break
 		await get_tree().create_timer(0.5).timeout
-	log_line("Autoplay after respawn: dead=%s hp=%d pos=%s creatures=%d" % [
+	log_line("Autoplay after respawn: dead=%s hp=%d pos=%s creatures=%d inv=%d" % [
 		str(world_state.is_player_dead()),
 		int(world_state.player.get("hp", 0)),
 		str(world_state.player_position()),
 		world_state.creature_count(),
+		client_state.inventory.size(),
 	])
 
 

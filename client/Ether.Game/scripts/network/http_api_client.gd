@@ -11,6 +11,7 @@ const PATH_REGISTER := "/auth/register"
 const PATH_REFRESH := "/auth/refresh"
 const PATH_ACCOUNT_CHARACTERS := "/accounts/%s/characters"
 const PATH_GAME_TOKEN := "/characters/%s/game-token"
+const PATH_INVENTORY := "/characters/%s/inventory"
 
 ## Emits the HTTP method/path/status for diagnostics. Never carries secrets.
 signal http_trace(method: String, path: String, status: int)
@@ -75,6 +76,10 @@ func create_character(account_id: String, name: String, character_class: String,
 
 func request_game_token(character_id: String, p_request_id: String = "") -> String:
 	return _request(HTTPClient.METHOD_POST, PATH_GAME_TOKEN % character_id, {}, true, p_request_id)
+
+
+func get_inventory(character_id: String, p_request_id: String = "") -> String:
+	return _request(HTTPClient.METHOD_GET, PATH_INVENTORY % character_id, {}, true, p_request_id)
 
 
 func _request(method: int, path: String, body: Dictionary, authenticated: bool, p_request_id: String = "") -> String:

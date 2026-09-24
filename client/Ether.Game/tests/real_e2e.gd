@@ -126,7 +126,7 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		var session: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
 		_account_id = String(session.get("accountId", ""))
 		_api.set_token(String(session.get("accessToken", "")))
-		print("REAL_E2E: 1/9 login ok (accountId=%s, accessToken=***)" % _account_id)
+		print("REAL_E2E: 1/11 login ok (accountId=%s, accessToken=***)" % _account_id)
 		_enter_stage(Stage.CHARACTERS, "characters")
 		var rid := _api.new_request_id()
 		_pending[rid] = "characters"
@@ -146,7 +146,7 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		if chosen.is_empty():
 			chosen = characters[0]
 		_character_id = String(chosen.get("characterId", ""))
-		print("REAL_E2E: 2/9 characters ok (%d; using %s state=%s)" % [
+		print("REAL_E2E: 2/11 characters ok (%d; using %s state=%s)" % [
 			characters.size(), _character_id, String(chosen.get("state", "?"))])
 		_enter_stage(Stage.GAME_TOKEN, "game-token")
 		var rid := _api.new_request_id()
@@ -158,9 +158,17 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 		if _game_token == "":
 			_fail("empty game token")
 			return
-		print("REAL_E2E: 3/9 game-token ok (gameToken=***)")
+		print("REAL_E2E: 3/11 game-token ok (gameToken=***)")
 		_enter_stage(Stage.WS_AUTH, "websocket authenticate")
 		_network.connect_to_server()
+	elif intent == "inventory":
+		var response: Dictionary = data if typeof(data) == TYPE_DICTIONARY else {}
+		var items: Array = response.get("items", []) if typeof(response.get("items", [])) == TYPE_ARRAY else []
+		print("REAL_E2E:    inventory HTTP -> %d stack(s)" % items.size())
+		for item in items:
+			if typeof(item) == TYPE_DICTIONARY:
+				print("REAL_E2E:      %s x%d" % [String(item.get("name", "?")), int(item.get("quantity", 0))])
+		_pass("full first-playable loop (respawn=%s, inventory=%d)" % [str(_respawn_rejected), items.size()])
 
 
 # --- WebSocket ----------------------------------------------------------------
@@ -169,7 +177,7 @@ func _on_event(name: String, payload: Dictionary) -> void:
 	if _finished:
 		return
 	if name == ProtocolMessages.EVT_GAME_AUTHENTICATED:
-		print("REAL_E2E: 4/9 game.authenticated ok (sessionId=%s)" % String(payload.get("sessionId", "")))
+		print("REAL_E2E: 4/11 game.authenticated ok (sessionId=%s)" % String(payload.get("sessionId", "")))
 		if String(payload.get("characterId", "")) != _character_id:
 			_fail("server authenticated unexpected character")
 			return
@@ -196,6 +204,9 @@ func _on_event(name: String, payload: Dictionary) -> void:
 		])
 		if bool(payload.get("targetDefeated", false)):
 			print("REAL_E2E: 10/10 creature defeated after %d attack(s)" % _attacks)
+			# Stop firing attacks immediately: the target is dead, so any further
+			# combat.attack would be a (correctly) rejected duplicate.
+			_stage = Stage.IDLE
 			var loot_count := 0
 			var loot_raw: Variant = payload.get(ProtocolMessages.FIELD_LOOT, [])
 			if typeof(loot_raw) == TYPE_ARRAY:
@@ -207,7 +218,11 @@ func _on_event(name: String, payload: Dictionary) -> void:
 				int(payload.get(ProtocolMessages.FIELD_EXPERIENCE, 0)),
 				loot_count,
 			])
-			_pass("full first-playable loop (respawn contract verified=%s)" % str(_respawn_rejected))
+			# Prove the dropped loot reached the authoritative inventory (M8).
+			var rid := _api.new_request_id()
+			_pending[rid] = "inventory"
+			print("REAL_E2E: 11/11 GET /characters/%s/inventory" % _character_id)
+			_api.get_inventory(_character_id, rid)
 
 
 func _on_snapshot(payload: Dictionary) -> void:
@@ -220,7 +235,12 @@ func _on_snapshot(payload: Dictionary) -> void:
 	if typeof(creatures_raw) == TYPE_ARRAY:
 		var creatures_arr: Array = creatures_raw
 		creature_count = creatures_arr.size()
-	print("REAL_E2E: 5/10 world.snapshot ok (mapId=%d %dx%d player=%s @ %d,%d, creatures=%d)" % [
+	var inventory_stacks := 0
+	var inventory_raw: Variant = payload.get("inventory", [])
+	if typeof(inventory_raw) == TYPE_ARRAY:
+		var inventory_arr: Array = inventory_raw
+		inventory_stacks = inventory_arr.size()
+	print("REAL_E2E: 5/11 world.snapshot ok (mapId=%d %dx%d player=%s @ %d,%d, creatures=%d, inventory=%d)" % [
 		_map_id,
 		int(payload.get("width", 0)),
 		int(payload.get("height", 0)),
@@ -228,6 +248,7 @@ func _on_snapshot(payload: Dictionary) -> void:
 		_position.x,
 		_position.y,
 		creature_count,
+		inventory_stacks,
 	])
 
 	_creature_id = _nearest_creature(payload.get("creatures", []), _position)
