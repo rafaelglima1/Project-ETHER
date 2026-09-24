@@ -74,4 +74,29 @@ public sealed class ItemInstance
             ownerCharacterId,
             ItemLocation.Inventory);
     }
+
+    /// <summary>Adds quantity to an existing stack (caller must ensure it does not exceed MaxStack).</summary>
+    public void AddQuantity(int amount, DateTimeOffset nowUtc)
+    {
+        if (amount < 1)
+        {
+            throw new DomainException("Quantity must be positive.");
+        }
+
+        Quantity += amount;
+        UpdatedAt = nowUtc;
+    }
+
+    /// <summary>Removes quantity from this stack (floors at 0).</summary>
+    public bool RemoveQuantity(int amount, DateTimeOffset nowUtc)
+    {
+        if (amount < 1)
+        {
+            throw new DomainException("Quantity must be positive.");
+        }
+
+        Quantity = Math.Max(0, Quantity - amount);
+        UpdatedAt = nowUtc;
+        return Quantity == 0;
+    }
 }

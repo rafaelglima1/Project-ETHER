@@ -46,7 +46,8 @@ public sealed record WorldSnapshotPayload(
     int Height,
     PlayerSnapshotPayload Player,
     DateTimeOffset ServerTime,
-    IReadOnlyList<CreatureSnapshotPayload>? Creatures = null);
+    IReadOnlyList<CreatureSnapshotPayload>? Creatures = null,
+    IReadOnlyList<Ether.Contracts.Characters.InventoryItemResponse>? Inventory = null);
 
 /// <summary>Payload of <see cref="ProtocolMessageNames.WorldCreatureMoved"/>.</summary>
 public sealed record WorldCreatureMovedEventPayload(

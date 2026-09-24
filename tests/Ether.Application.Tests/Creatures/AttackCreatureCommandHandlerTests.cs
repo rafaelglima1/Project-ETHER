@@ -28,9 +28,9 @@ public sealed class AttackCreatureCommandHandlerTests
         FakeCombatStatsProvider stats,
         IAbilityCooldownStore cooldowns,
         IRandomSource random,
-        FakeItemInstanceRepository? items = null) =>
+        FakeInventoryService? items = null) =>
         new(persistence, world, persistence, stats, cooldowns, new NoopEntityLockProvider(), random,
-            new KillRewardService(items ?? new FakeItemInstanceRepository(), random, TimeProvider.System),
+            new KillRewardService(items ?? new FakeInventoryService(), random, TimeProvider.System),
             Microsoft.Extensions.Options.Options.Create(Options), TimeProvider.System);
 
     private static FakeCombatStatsProvider Neutral() => new();
@@ -176,7 +176,7 @@ public sealed class AttackCreatureCommandHandlerTests
         {
             Stats = new CombatStats(Power: 100, Armor: 0, CriticalChance: 0, CriticalMultiplier: 1, new Dictionary<DamageType, double>()),
         };
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         // crit roll (1.0 = no crit), loot chance 0.1 (< 0.8), quantity 0.0.
         var random = new SequencedRandomSource(1.0, 0.1, 0.0);
         var handler = CreateHandler(persistence, world, stats, new FakeCooldownStore(), random, items);
@@ -199,7 +199,7 @@ public sealed class AttackCreatureCommandHandlerTests
         var world = new FakeCreatureWorld();
         var (account, attacker) = await persistence.SeedInWorldCharacterAsync("Hero", 0, 0);
         var creature = world.Seed(new CreatureDefinitionId("creature.wolf"), 1, 0);
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         var handler = CreateHandler(persistence, world, new FakeCombatStatsProvider(), new FakeCooldownStore(), new FixedRandomSource { Value = 1 }, items);
 
         var result = await handler.HandleAsync(account, attacker.Id, BasicAttack, creature.Id, CancellationToken.None);

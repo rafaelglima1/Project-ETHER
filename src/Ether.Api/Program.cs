@@ -95,6 +95,7 @@ app.MapGet("/ready", async (IDependencyReadinessProbe probe, CancellationToken c
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapCharacterEndpoints();
+app.MapInventoryEndpoints();
 
 app.Run();
 

@@ -22,7 +22,7 @@ public static class GameServerServiceCollectionExtensions
         services.AddSingleton<ProtocolSerializer>();
         services.AddSingleton<ProtocolDispatcher>();
         services.AddSingleton<GameSessionManager>();
-        services.AddSingleton<WorldSnapshotFactory>();
+        services.AddScoped<WorldSnapshotFactory>();
 
         // Command handlers (resolved from a scope per command).
         services.AddScoped<IProtocolCommandHandler, AuthenticateCommandHandler>();

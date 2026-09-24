@@ -78,7 +78,7 @@ public sealed class RespawnCommandHandler : IProtocolCommandHandler
 
         await responder.SendEventAsync(
             ProtocolMessageNames.WorldSnapshot,
-            _snapshots.Build(character),
+            await _snapshots.BuildAsync(character, cancellationToken).ConfigureAwait(false),
             envelope.RequestId,
             cancellationToken).ConfigureAwait(false);
     }

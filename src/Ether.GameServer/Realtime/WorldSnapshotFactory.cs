@@ -17,21 +17,24 @@ public sealed class WorldSnapshotFactory
     private readonly IWorldMapProvider _maps;
     private readonly ICreatureWorld _creatures;
     private readonly CreatureSpawnService _spawner;
+    private readonly IInventoryService _inventory;
     private readonly TimeProvider _timeProvider;
 
     public WorldSnapshotFactory(
         IWorldMapProvider maps,
         ICreatureWorld creatures,
         CreatureSpawnService spawner,
+        IInventoryService inventory,
         TimeProvider timeProvider)
     {
         _maps = maps;
         _creatures = creatures;
         _spawner = spawner;
+        _inventory = inventory;
         _timeProvider = timeProvider;
     }
 
-    public WorldSnapshotPayload Build(CharacterResponse character)
+    public async Task<WorldSnapshotPayload> BuildAsync(CharacterResponse character, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(character);
 
@@ -42,6 +45,20 @@ public sealed class WorldSnapshotFactory
         var creatures = _creatures.GetByMap(mapId)
             .Where(creature => creature.IsAlive)
             .Select(ToSnapshot)
+            .ToList();
+
+        var inventory = await _inventory
+            .GetInventoryAsync(new Ether.Domain.Characters.CharacterId(character.CharacterId), cancellationToken)
+            .ConfigureAwait(false);
+
+        var inventoryItems = inventory
+            .Select(item => new InventoryItemResponse(
+                item.DefinitionId.Value,
+                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).Name,
+                item.Quantity,
+                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).MaxStack,
+                Ether.Domain.Items.ItemCatalog.Get(item.DefinitionId).Stackable,
+                item.Location.ToString()))
             .ToList();
 
         return new WorldSnapshotPayload(
@@ -59,7 +76,8 @@ public sealed class WorldSnapshotFactory
                 character.Health,
                 character.MaxHealth),
             _timeProvider.GetUtcNow(),
-            creatures);
+            creatures,
+            inventoryItems);
     }
 
     private static CreatureSnapshotPayload ToSnapshot(CreatureInstance creature)

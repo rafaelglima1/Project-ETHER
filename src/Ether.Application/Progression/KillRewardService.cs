@@ -2,7 +2,6 @@ using Ether.Application.Abstractions;
 using Ether.Domain.Characters;
 using Ether.Domain.Combat;
 using Ether.Domain.Creatures;
-using Ether.Domain.Items;
 using Ether.Domain.Loot;
 using Ether.Domain.Progression;
 
@@ -16,13 +15,13 @@ namespace Ether.Application.Progression;
 /// </summary>
 public sealed class KillRewardService
 {
-    private readonly IItemInstanceRepository _items;
+    private readonly IInventoryService _inventory;
     private readonly IRandomSource _random;
     private readonly TimeProvider _timeProvider;
 
-    public KillRewardService(IItemInstanceRepository items, IRandomSource random, TimeProvider timeProvider)
+    public KillRewardService(IInventoryService inventory, IRandomSource random, TimeProvider timeProvider)
     {
-        _items = items;
+        _inventory = inventory;
         _random = random;
         _timeProvider = timeProvider;
     }
@@ -37,17 +36,17 @@ public sealed class KillRewardService
 
         var levelsGained = killer.GrantExperience(definition.ExperienceReward, _timeProvider.GetUtcNow());
 
-        var dropped = new List<ItemInstance>();
+        var dropped = new List<Domain.Items.ItemInstance>();
         var table = LootTableCatalog.For(definition.Id);
 
         if (table is not null)
         {
             foreach (var drop in LootRoller.Roll(table, _random))
             {
-                var itemDefinition = ItemCatalog.Get(drop.ItemDefinitionId);
-                var instance = ItemInstance.CreateLoot(itemDefinition, drop.Quantity, killer.Id);
-                await _items.AddAsync(instance, cancellationToken).ConfigureAwait(false);
-                dropped.Add(instance);
+                var itemDefinition = Domain.Items.ItemCatalog.Get(drop.ItemDefinitionId);
+                var instances = await _inventory.AddLootAsync(killer.Id, itemDefinition, drop.Quantity, cancellationToken)
+                    .ConfigureAwait(false);
+                dropped.AddRange(instances);
             }
         }
 

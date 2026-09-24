@@ -3,6 +3,7 @@ using Ether.Application.Auth;
 using Ether.Application.Characters;
 using Ether.Application.Combat;
 using Ether.Application.Creatures;
+using Ether.Application.Inventory;
 using Ether.Application.Progression;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -46,6 +47,10 @@ public static class ApplicationServiceCollectionExtensions
 
         // Progression + loot (M7).
         services.AddScoped<KillRewardService>();
+
+        // Inventory (M8).
+        services.AddScoped<IInventoryService, InventoryService>();
+        services.AddScoped<GetInventoryHandler>();
 
         return services;
     }

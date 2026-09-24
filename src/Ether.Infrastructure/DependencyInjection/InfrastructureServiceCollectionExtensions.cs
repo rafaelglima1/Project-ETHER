@@ -50,6 +50,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<CharacterOptions>(configuration.GetSection(CharacterOptions.SectionName));
         services.Configure<WorldOptions>(configuration.GetSection(WorldOptions.SectionName));
         services.Configure<CombatOptions>(configuration.GetSection(CombatOptions.SectionName));
+        services.Configure<InventoryOptions>(configuration.GetSection(InventoryOptions.SectionName));
 
         // Authentication options are validated at startup: in Production a usable
         // signing key is mandatory and the development placeholder is rejected.

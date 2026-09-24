@@ -22,7 +22,7 @@ public sealed class KillRewardServiceTests
     [Fact]
     public async Task Grants_creature_experience()
     {
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         var service = new KillRewardService(items, new SequencedRandomSource(0.0, 0.0), TimeProvider.System);
         var definition = CreatureCatalog.Get(SlimeId);
         var killer = Killer();
@@ -37,7 +37,7 @@ public sealed class KillRewardServiceTests
     [Fact]
     public async Task Rolls_loot_into_the_killers_inventory()
     {
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         // chance 0.1 (< 0.8) then quantity 0.0 → 1 slime gel.
         var service = new KillRewardService(items, new SequencedRandomSource(0.1, 0.0), TimeProvider.System);
         var definition = CreatureCatalog.Get(SlimeId);
@@ -55,7 +55,7 @@ public sealed class KillRewardServiceTests
     [Fact]
     public async Task No_loot_when_the_roll_misses()
     {
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         var service = new KillRewardService(items, new SequencedRandomSource(0.99), TimeProvider.System);
 
         var reward = await service.GrantAsync(Killer(), CreatureCatalog.Get(SlimeId), CancellationToken.None);
@@ -67,7 +67,7 @@ public sealed class KillRewardServiceTests
     [Fact]
     public async Task Level_up_is_reported()
     {
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         var service = new KillRewardService(items, new SequencedRandomSource(0.99), TimeProvider.System);
         var killer = Killer();
 
@@ -84,7 +84,7 @@ public sealed class KillRewardServiceTests
     [Fact]
     public async Task Creature_without_a_loot_table_drops_nothing()
     {
-        var items = new FakeItemInstanceRepository();
+        var items = new FakeInventoryService();
         var service = new KillRewardService(items, new SequencedRandomSource(0.0, 0.0), TimeProvider.System);
 
         var definition = new CreatureDefinition(
