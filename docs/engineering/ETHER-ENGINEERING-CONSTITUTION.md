@@ -16,13 +16,13 @@ They may only be changed intentionally as an architectural/product decision.
 
 When project sources disagree, use this precedence:
 
-Explicit current product decisions  
-Canonical Blueprint v5.x  
-Accepted ADRs  
-Implemented repository state and executable contracts  
-Current agent handoff  
-README/status summaries  
-Historical prompts/reports
+1. Explicit current product decisions
+2. Canonical Blueprint v5.x
+3. Accepted ADRs
+4. Implemented repository state and executable contracts
+5. Current agent handoff
+6. README/status summaries
+7. Historical prompts/reports
 
 README status text must never override canonical architecture, ADRs or verified repository state.
 
@@ -127,12 +127,8 @@ The Godot client must preserve clear layering.
 
 Conceptually:
 
-Transport  
-→ Protocol serialization  
-→ Event dispatch  
-→ Game/application facade  
-→ Client feature state  
-→ UI / rendering / input
+Transport → Protocol serialization → Event dispatch → Game/application facade →
+Client feature state → UI / rendering / input
 
 UI code must not become a second networking layer.
 
@@ -197,9 +193,7 @@ Multi-step operations must not leave partial authoritative state.
 
 Where relevant:
 
-validate/preflight  
-→ mutate  
-→ persist atomically
+validate/preflight → mutate → persist atomically
 
 Examples include:
 
@@ -253,9 +247,7 @@ Prefer:
 
 otherwise:
 
-disposable test account  
-→ disposable character  
-→ E2E
+disposable test account → disposable character → E2E
 
 Never:
 
