@@ -22,6 +22,10 @@ func dispatch(envelope: Dictionary) -> void:
 	if type == ProtocolMessages.TYPE_ERROR:
 		error_received.emit(name, _code(body), _message(body), request_id)
 		return
+	if type != ProtocolMessages.TYPE_EVENT:
+		# A command envelope from the server is not a success event, even if its
+		# name matches one. Never let an error/command become an empty snapshot.
+		return
 
 	if name == ProtocolMessages.EVT_WORLD_SNAPSHOT:
 		snapshot_received.emit(body)

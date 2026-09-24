@@ -62,6 +62,26 @@ func test_login_stores_token_and_create_character_uses_it() -> void:
 	assert_eq(backend.characters.size(), before + 1, "character added")
 
 
+func test_register_response_is_followed_by_login_before_fetching_characters() -> void:
+	var game: Node = load("res://scripts/core/game_client.gd").new()
+	var config := ClientConfig.new()
+	config.mode = ClientConfig.Mode.MOCK
+	game._build(config)
+	var authenticated_names: Array[String] = []
+	var character_lists: Array = []
+	game.authenticated.connect(func(name): authenticated_names.append(name))
+	game.characters_changed.connect(func(characters): character_lists.append(characters))
+
+	game.request_register("fresh-player@example.com", "temporary-test-password")
+
+	assert_eq(authenticated_names.size(), 1, "registration completes only after login")
+	assert_eq(game.client_state.email, "fresh-player@example.com")
+	assert_eq(game.client_state.access_token, "mock-access-token", "register response itself has no token")
+	assert_eq(character_lists.size(), 1, "character list requested after authenticated login")
+	assert_eq(game._registration_password, "", "registration password cleared after follow-up login")
+	game.free()
+
+
 func test_oracle_profile_is_used_for_real_defaults() -> void:
 	var config := ClientConfig.new()
 	config.profile = ClientConfig.Profile.ORACLE

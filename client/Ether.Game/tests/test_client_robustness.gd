@@ -138,6 +138,38 @@ func test_http_inventory_errors_include_expired_session_message() -> void:
 	api.free()
 
 
+func test_error_named_world_snapshot_is_not_success_snapshot() -> void:
+	var dispatcher := EventDispatcher.new()
+	var snapshots: Array = []
+	var errors: Array = []
+	dispatcher.snapshot_received.connect(func(payload): snapshots.append(payload))
+	dispatcher.error_received.connect(func(name, code, message, _request_id):
+		errors.append({"name": name, "code": code, "message": message}))
+	dispatcher.dispatch({
+		"type": ProtocolMessages.TYPE_ERROR,
+		"name": ProtocolMessages.EVT_WORLD_SNAPSHOT,
+		"payload": {"code": "NOT_AUTHORIZED", "message": "denied"},
+	})
+	assert_eq(snapshots.size(), 0, "error must not clear/replace world state")
+	assert_eq(errors.size(), 1, "error semantics preserved")
+	assert_eq(errors[0]["code"], "NOT_AUTHORIZED")
+
+
+func test_command_named_world_snapshot_is_ignored() -> void:
+	var dispatcher := EventDispatcher.new()
+	var snapshots: Array = []
+	var events: Array = []
+	dispatcher.snapshot_received.connect(func(payload): snapshots.append(payload))
+	dispatcher.event_received.connect(func(name, payload): events.append({"name": name, "payload": payload}))
+	dispatcher.dispatch({
+		"type": ProtocolMessages.TYPE_COMMAND,
+		"name": ProtocolMessages.EVT_WORLD_SNAPSHOT,
+		"payload": {},
+	})
+	assert_eq(snapshots.size(), 0, "command must not be consumed as snapshot")
+	assert_eq(events.size(), 0, "command must not be consumed as event")
+
+
 func test_oracle_profile_endpoints() -> void:
 	var config := ClientConfig.new()
 	config.profile = ClientConfig.Profile.ORACLE

@@ -26,7 +26,14 @@ func login(email: String, _password: String, p_request_id: String = "") -> Strin
 
 
 func register(email: String, password: String, p_request_id: String = "") -> String:
-	return login(email, password, p_request_id)
+	var request_id := resolve_request_id(p_request_id)
+	backend.authenticate_account(email)
+	_complete(request_id, true, {
+		"accountId": backend.account_id,
+		"email": email,
+		"status": "Active",
+	}, "")
+	return request_id
 
 
 func refresh(_refresh_token: String, p_request_id: String = "") -> String:

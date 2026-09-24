@@ -1,9 +1,8 @@
 # Ether client — realtime contract
 
 This file documents the wire contract the Godot client implements. It is
-**client-owned documentation**: it mirrors the backend contract (ADR-0003,
-ADR-0004) and, for M6, records the contract the client expects while the backend
-creature replication is not yet frozen.
+**client-owned documentation**: it mirrors the frozen backend contracts
+(ADR-0003 through ADR-0006), plus the accepted respawn and M8 inventory contracts.
 
 Envelope (all messages):
 
@@ -191,4 +190,3 @@ Rules the client follows:
 - Capacity (`Inventory:MaxSlots = 30`) is server config and is **not** in any
   payload, so the client shows no capacity bar (not invented).
 - Unknown `itemDefinitionId` values are displayed but never interpreted.
-

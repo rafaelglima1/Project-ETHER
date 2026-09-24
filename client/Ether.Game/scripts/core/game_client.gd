@@ -42,6 +42,8 @@ var last_error_code := ""
 
 var _backend: MockBackend = null
 var _pending: Dictionary = {}
+## Held only between successful registration and the follow-up login request.
+var _registration_password := ""
 var _entered_world := false
 var _mode := "mock"
 var _autoplay := false
@@ -138,6 +140,7 @@ func request_login(email: String, password: String) -> void:
 
 func request_register(email: String, password: String) -> void:
 	client_state.email = email
+	_registration_password = password
 	var request_id := api.new_request_id()
 	_pending[request_id] = "register"
 	api.register(email, password, request_id)
@@ -268,6 +271,7 @@ func request_interact(_target_id: String) -> void:
 
 func request_disconnect() -> void:
 	_entered_world = false
+	_registration_password = ""
 	network.disconnect_from_server()
 	client_state.clear_session()
 	world_state.clear()
@@ -325,11 +329,23 @@ func _on_api_completed(request_id: String, ok: bool, data: Variant, error: Strin
 	_pending.erase(request_id)
 
 	if not ok:
+		if intent == "register":
+			_registration_password = ""
 		report_error("ApiError", error)
 		log_line("API '%s' failed: %s" % [intent, error])
 		return
 
-	if intent == "login" or intent == "register":
+	if intent == "register":
+		var registration := _as_dictionary(data)
+		if String(registration.get("accountId", "")) == "":
+			_registration_password = ""
+			report_error("ApiContract", "Registration response did not include an account.")
+			return
+		var password := _registration_password
+		_registration_password = ""
+		log_line("Account created; signing in.")
+		request_login(client_state.email, password)
+	elif intent == "login":
 		client_state.set_session(_as_dictionary(data))
 		api.set_token(client_state.access_token)
 		authenticated.emit(client_state.display_name())

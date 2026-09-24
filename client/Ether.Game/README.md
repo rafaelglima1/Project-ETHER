@@ -126,7 +126,7 @@ respawn, so the loop above runs offline with no code changes above the transport
 godot --headless --path client/Ether.Game --script res://tests/test_runner.gd
 ```
 
-Covers (128 headless tests): canonical envelope/hostile input/GUID
+Covers (132 headless tests): canonical envelope/hostile input/GUID
 requestId/sequence, state machine, heartbeat, reconnect, mock transport round
 trips, canonical snapshot + creature ingestion, movement acceptance/rejection,
 combat damage/death/cooldown/range rejections, creature AI chase+attack,
@@ -140,13 +140,17 @@ stale snapshot replacement, and Android resume→reconnect.
 ETHER_CLIENT_MODE=real ETHER_CLIENT_PROFILE=remote \
 ETHER_CLIENT_API_URL=https://game.rotagov.com.br \
 ETHER_CLIENT_WS_URL=wss://game.rotagov.com.br/game \
-ETHER_E2E_EMAIL=... ETHER_E2E_PASSWORD=... \
 godot --headless --path client/Ether.Game --script res://tests/real_e2e.gd
 ```
 
-11 stages; proves the loop end-to-end on Oracle and validates `character.respawn`
-(negative path) plus authoritative inventory over HTTP. Never starts a local
-backend; exits `2` (BLOCKED) if endpoints are not configured.
+Optional `ETHER_E2E_EMAIL` and `ETHER_E2E_PASSWORD` must be supplied as a pair;
+omit both to self-register a disposable Oracle test account. 13 checkpoints:
+register, login, character, game token, WSS, snapshot, respawn rejection,
+movement, combat/loot, HTTP inventory, reconnect, fresh snapshot and HTTP
+inventory agreement. It
+creates a Warrior if no offline character exists. Generated credentials and tokens
+are never printed. Never starts a local backend; exits `2` only when endpoints or
+a complete credential pair are not configured.
 
 ---
 
@@ -157,7 +161,6 @@ ADR-0004 combat, ADR-0005 creatures + AI, ADR-0006 progression/loot, plus the
 frozen **respawn** (`character.respawn`, backend `b68acc7`) and **M8 inventory**
 (`world.snapshot.inventory[]` + `GET /characters/{id}/inventory`, backend
 `d0aec66`). Full details in [`CONTRACTS.md`](CONTRACTS.md).
-pending. `BACKEND_FILES_CHANGED: NONE` — no file outside `client/` was touched.
 
 ---
 
@@ -175,12 +178,21 @@ PvP, market, crafting, monetization.
 
 ### Validation (client)
 
-- **128/128** headless tests (protocol, transport, robustness, state, combat, AI,
+- **132/132** headless tests (protocol, transport, robustness, state, combat, AI,
   progression, death/respawn, inventory, hardening).
 - Autoplay mock smoke: `kill → loot=1 → died → respawned → dead=false hp=100
   pos=(0,0) creatures=3 inv=1`.
-- `tests/real_e2e.gd` against Oracle: **11/11 PASS** (login → character →
-  game-token → WSS → authenticate → snapshot → respawn verified → movement →
-  combat → defeat → XP/loot → authoritative inventory HTTP).
+- `tests/real_e2e.gd` against Oracle: **13/13 PASS** (disposable registration,
+  character, WSS, snapshot, respawn rejection, movement, combat, XP/loot, HTTP
+  inventory and post-reconnect HTTP/world-snapshot equality).
 - Oracle: `https://game.rotagov.com.br` / `wss://game.rotagov.com.br/game`.
 - Android APK: `com.rotagov.ether` debug export (see build section).
+
+### Milestone handoff
+
+M8 Inventory is implemented through the frozen HTTP and WebSocket representations.
+The client compares them after reconnect and treats a missing/null snapshot field
+as unavailable, never as an empty inventory. Latest backend handoff lists
+ETHER-021 Equipment next, but blocks it on the `SPEC_GAP` for item stat modifiers
+and effective-stat mapping. Do not implement client-only equipment or invent those
+rules; wait for the backend/product contract.
