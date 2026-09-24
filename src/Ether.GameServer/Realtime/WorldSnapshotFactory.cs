@@ -19,19 +19,22 @@ public sealed class WorldSnapshotFactory
     private readonly CreatureSpawnService _spawner;
     private readonly IInventoryService _inventory;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<WorldSnapshotFactory> _logger;
 
     public WorldSnapshotFactory(
         IWorldMapProvider maps,
         ICreatureWorld creatures,
         CreatureSpawnService spawner,
         IInventoryService inventory,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<WorldSnapshotFactory> logger)
     {
         _maps = maps;
         _creatures = creatures;
         _spawner = spawner;
         _inventory = inventory;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     public async Task<WorldSnapshotPayload> BuildAsync(CharacterResponse character, CancellationToken cancellationToken)
@@ -47,9 +50,10 @@ public sealed class WorldSnapshotFactory
             .Select(ToSnapshot)
             .ToList();
 
-        var inventory = await _inventory
-            .GetInventoryAsync(new Ether.Domain.Characters.CharacterId(character.CharacterId), cancellationToken)
-            .ConfigureAwait(false);
+        var characterId = new Ether.Domain.Characters.CharacterId(character.CharacterId);
+        var inventory = await _inventory.GetInventoryAsync(characterId, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogDebug("Snapshot inventory for {CharacterId}: {Count} items", characterId.Value, inventory.Count);
 
         var inventoryItems = inventory
             .Select(item => new InventoryItemResponse(

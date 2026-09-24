@@ -26,7 +26,8 @@ public sealed class EnterWorldCommandHandlerTests
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
         var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
         var snapshots = new Ether.GameServer.Realtime.WorldSnapshotFactory(
-            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System);
+            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Ether.GameServer.Realtime.WorldSnapshotFactory>.Instance);
         var handler = new EnterWorldCommandHandler(enterWorld, snapshots, TimeProvider.System);
 
         var session = new GameSession(16, DateTimeOffset.UtcNow);
@@ -42,7 +43,8 @@ public sealed class EnterWorldCommandHandlerTests
         var enterWorld = new EnterWorldHandler(persistence, persistence, TimeProvider.System);
         var creatures = new Ether.Infrastructure.Memory.InMemoryCreatureWorld();
         var snapshots = new Ether.GameServer.Realtime.WorldSnapshotFactory(
-            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System);
+            new FakeWorldMapProvider(), creatures, new CreatureSpawnService(creatures), new FakeInventoryService(), TimeProvider.System,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<Ether.GameServer.Realtime.WorldSnapshotFactory>.Instance);
         var handler = new EnterWorldCommandHandler(enterWorld, snapshots, TimeProvider.System);
         var session = new GameSession(16, DateTimeOffset.UtcNow);
         var responder = new CapturingResponder();
